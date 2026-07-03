@@ -1,7 +1,7 @@
 extends Node
 
 const SAVE_PATH := "user://arcane_archivist_save_0.json"
-const SAVE_VERSION := 1
+const SAVE_VERSION := 2
 
 func default_save_data() -> Dictionary:
 	return {
@@ -9,20 +9,25 @@ func default_save_data() -> Dictionary:
 		"active_request_id": "",
 		"completed_request_ids": [],
 		"archived_tome_ids": [],
+		"archived_relic_ids": [],
+		"archive_slots": [],
+		"active_archive_bonus_ids": [],
 		"settings": {
 			"text_scale": 1.0,
 			"show_tooltips": true,
 		},
 		"debug": {
-			"last_opened_version": "0.1",
+			"last_opened_version": "0.2",
 		},
 	}
 
 func load_save() -> Dictionary:
-	if not FileAccess.file_exists(SAVE_PATH):
+	_ensure_save_dir()
+	var save_path := _resolved_save_path()
+	if not FileAccess.file_exists(save_path):
 		return default_save_data()
 
-	var file = FileAccess.open(SAVE_PATH, FileAccess.READ)
+	var file := FileAccess.open(save_path, FileAccess.READ)
 	if file == null:
 		return default_save_data()
 
@@ -33,7 +38,8 @@ func load_save() -> Dictionary:
 	return _merge_defaults(parsed)
 
 func save_save(data: Dictionary) -> bool:
-	var file = FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	_ensure_save_dir()
+	var file := FileAccess.open(_resolved_save_path(), FileAccess.WRITE)
 	if file == null:
 		return false
 
@@ -41,7 +47,7 @@ func save_save(data: Dictionary) -> bool:
 	return true
 
 func _merge_defaults(data: Dictionary) -> Dictionary:
-	var merged = default_save_data()
+	var merged := default_save_data()
 	for key in data.keys():
 		if key == "settings" and typeof(data[key]) == TYPE_DICTIONARY:
 			for setting_key in data[key].keys():
@@ -51,4 +57,12 @@ func _merge_defaults(data: Dictionary) -> Dictionary:
 				merged["debug"][debug_key] = data[key][debug_key]
 		else:
 			merged[key] = data[key]
+
 	return merged
+
+func _ensure_save_dir() -> void:
+	var save_dir := ProjectSettings.globalize_path("user://")
+	DirAccess.make_dir_recursive_absolute(save_dir)
+
+func _resolved_save_path() -> String:
+	return ProjectSettings.globalize_path(SAVE_PATH)

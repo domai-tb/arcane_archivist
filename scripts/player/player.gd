@@ -27,6 +27,9 @@ func setup_player(new_deck, new_hp: int, new_max_hp: int, new_shield: int, new_i
 	insight = new_insight
 	insight_max = max(new_insight, 3)
 	mode = new_mode
+	if mode == "dungeon":
+		z_as_relative = false
+		z_index = 40
 	_reset_cooldowns()
 	queue_redraw()
 
@@ -141,5 +144,7 @@ func _reset_cooldowns() -> void:
 		cooldowns[card_id] = 0.0
 
 func _draw() -> void:
-	draw_circle(Vector2.ZERO, 11.0, Color(0.85, 0.86, 0.95))
-	draw_circle(Vector2.ZERO, 6.0, Color(0.28, 0.35, 0.53))
+	draw_circle(Vector2.ZERO, 22.0, Color(0.98, 0.99, 1.0))
+	draw_circle(Vector2.ZERO, 16.0, Color(0.71, 0.80, 0.99))
+	draw_circle(Vector2.ZERO, 8.0, Color(0.14, 0.18, 0.32))
+	draw_line(Vector2.ZERO, Vector2(0.0, -16.0), Color(1.0, 0.94, 0.65), 3.0, true)

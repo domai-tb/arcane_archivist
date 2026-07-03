@@ -15,6 +15,8 @@ func setup(new_controller, new_definition, new_room, new_spawn_position: Vector2
 	room = new_room
 	spawn_position = new_spawn_position
 	position = spawn_position
+	z_as_relative = false
+	z_index = 30
 	hp = definition.max_hp if definition != null else 1
 	queue_redraw()
 
@@ -61,6 +63,8 @@ func _process(delta: float) -> void:
 func _draw() -> void:
 	if not is_alive():
 		return
-	var body_color = Color(0.83, 0.55, 0.38) if definition != null and definition.kind == "melee" else Color(0.48, 0.66, 0.92)
-	draw_circle(Vector2.ZERO, 10.0, body_color)
-	draw_circle(Vector2.ZERO, 4.0, Color(0.12, 0.12, 0.12))
+	var body_color = Color(0.96, 0.52, 0.26) if definition != null and definition.kind == "melee" else Color(0.34, 0.78, 1.0)
+	draw_circle(Vector2.ZERO, 20.0, Color(0.1, 0.08, 0.12))
+	draw_circle(Vector2.ZERO, 16.0, body_color)
+	draw_circle(Vector2.ZERO, 7.0, Color(0.06, 0.06, 0.08))
+	draw_line(Vector2(-10.0, 0.0), Vector2(10.0, 0.0), Color(1.0, 0.96, 0.8), 2.0, true)
