@@ -50,11 +50,24 @@ func get_card_id(index: int) -> String:
 func get_card_def(index: int):
 	return ContentDB.get_card(get_card_id(index))
 
+func get_card_runtime(index: int) -> Dictionary:
+	var card = get_card_def(index)
+	if card == null:
+		return {}
+	return ContentDB.get_card_runtime_data(card.id, _get_active_bonuses())
+
+func _get_active_bonuses() -> Array:
+	var app_state = get_node_or_null("/root/AppState")
+	if app_state != null and app_state.has_method("get_active_archive_bonuses"):
+		return app_state.get_active_archive_bonuses()
+	return []
+
 func is_card_ready(index: int) -> bool:
 	var card = get_card_def(index)
 	if card == null:
 		return false
-	return float(cooldowns.get(card.id, 0.0)) <= 0.0 and insight >= card.cost
+	var runtime := get_card_runtime(index)
+	return float(cooldowns.get(card.id, 0.0)) <= 0.0 and insight >= int(runtime.get("cost", card.cost))
 
 func get_card_cooldown(index: int) -> float:
 	var card = get_card_def(index)
@@ -66,7 +79,8 @@ func set_card_cooldown(card_id: String) -> void:
 	var card = ContentDB.get_card(card_id)
 	if card == null:
 		return
-	cooldowns[card_id] = card.cooldown
+	var runtime := ContentDB.get_card_runtime_data(card_id, _get_active_bonuses())
+	cooldowns[card_id] = float(runtime.get("cooldown", card.cooldown))
 
 func tick_cooldowns(delta: float) -> void:
 	for card_id in cooldowns.keys():
@@ -133,9 +147,11 @@ func request_card_use(index: int) -> void:
 		return
 	if not is_card_ready(index):
 		return
-	if insight < card.cost:
+	var runtime := get_card_runtime(index)
+	var cost := int(runtime.get("cost", card.cost))
+	if insight < cost:
 		return
-	insight -= card.cost
+	insight -= cost
 	set_card_cooldown(card.id)
 
 func _reset_cooldowns() -> void:

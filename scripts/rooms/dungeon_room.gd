@@ -92,6 +92,11 @@ func get_prompt_text() -> String:
 				return "The relic cache is empty. Interact to move on."
 			if is_cleared():
 				return "Press Interact to claim the relic cache."
+		if get_reward_kind() == "card_choice":
+			if reward_used:
+				return "The card cache is spent. Interact to move on."
+			if is_cleared():
+				return "Press Interact to study the cache and bias your next reward."
 		if get_hazard_kind() == "ink_pool":
 			if is_cleared():
 				return "Press Interact to force through the ink pool."
@@ -99,6 +104,10 @@ func get_prompt_text() -> String:
 		if is_cleared():
 			return "Press Interact to advance."
 		return "The watch chamber is still contested."
+	if room_type == "elite":
+		if is_cleared():
+			return "Press Interact to claim the elite scriptorium cache."
+		return "The elite chamber will punish careless cards."
 	if room_type == "tome":
 		if is_cleared():
 			return "Press Interact to recover the requested tome."
@@ -113,6 +122,8 @@ func get_stats_text() -> String:
 	if room_type == "reward":
 		reward_state = "yes" if not reward_used and is_cleared() else "no"
 	elif room_type == "optional":
+		reward_state = "yes" if not reward_used and is_cleared() else "no"
+	elif room_type == "elite":
 		reward_state = "yes" if not reward_used and is_cleared() else "no"
 	return "%s | Enemies: %d | Reward ready: %s" % [room_type.capitalize(), _alive_enemy_count(), reward_state]
 
@@ -135,12 +146,20 @@ func handle_interact(player) -> Dictionary:
 			if relic_def != null:
 				relic_name = relic_def.name
 			return {"advance": true, "message": "You uncover a relic cache: %s." % relic_name}
+		if get_reward_kind() == "card_choice":
+			controller.run_state.reward_choice_bonus_count += 1
+			return {"advance": true, "message": "The cache sharpens future card choices."}
 
 		if get_hazard_kind() == "ink_pool":
 			player.take_damage(1)
 			return {"advance": true, "message": "You force through the ink pool and lose 1 HP."}
 
 		return {"advance": true, "message": "The chamber yields a small advantage."}
+
+	if get_room_type() == "elite" and is_cleared() and not reward_used:
+		reward_used = true
+		controller.run_state.reward_choice_bonus_count += 1
+		return {"advance": true, "message": "The elite scriptorium yields a stronger reward choice."}
 
 	if get_room_type() == "tome" and is_cleared():
 		return {"complete": true, "message": "The tome secured archive.", "tome_id": controller.app_state.get_active_request_tome_id()}

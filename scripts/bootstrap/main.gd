@@ -29,6 +29,8 @@ func _on_start_dive_requested(request_id: String) -> void:
 	if request_id == "":
 		return
 	var run_state = app_state.start_run()
+	if run_state == null:
+		return
 	show_dungeon(run_state)
 
 func _on_run_finished(success: bool, tome_id: String) -> void:

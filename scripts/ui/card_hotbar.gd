@@ -55,8 +55,16 @@ func _process(_delta: float) -> void:
 			continue
 
 		var cooldown = player.get_card_cooldown(i)
-		var state_text = "Ready" if cooldown <= 0.0 and player.insight >= card.cost else str(snapped(cooldown, 0.1))
-		button.text = "%s\nC:%s %s" % [card.name, card.cost, state_text]
-		button.disabled = cooldown > 0.0 or player.insight < card.cost
+		var runtime := ContentDB.get_card_runtime_data(card.id, _get_active_bonuses())
+		var cost := int(runtime.get("cost", card.cost))
+		var state_text = "Ready" if cooldown <= 0.0 and player.insight >= cost else str(snapped(cooldown, 0.1))
+		button.text = "%s\nC:%d %s" % [card.name, cost, state_text]
+		button.disabled = cooldown > 0.0 or player.insight < cost
 
 	info_label.text = "Insight: %d/%d" % [player.insight, player.insight_max]
+
+func _get_active_bonuses() -> Array:
+	var app_state = get_node_or_null("/root/AppState")
+	if app_state != null and app_state.has_method("get_active_archive_bonuses"):
+		return app_state.get_active_archive_bonuses()
+	return []

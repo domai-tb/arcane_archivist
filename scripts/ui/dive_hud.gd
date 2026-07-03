@@ -8,6 +8,7 @@ var controls_label: Label
 var prompt_label: Label
 var message_label: Label
 var bonus_label: Label
+var deck_label: Label
 var hotbar = null
 var pending_player = null
 
@@ -56,6 +57,11 @@ func _build_ui() -> void:
 	bonus_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	stack.add_child(bonus_label)
 
+	deck_label = Label.new()
+	deck_label.custom_minimum_size = Vector2(360, 60)
+	deck_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	stack.add_child(deck_label)
+
 	hotbar = preload("res://scenes/cards/CardHotbar.tscn").instantiate()
 	hotbar.card_selected.connect(_on_card_selected)
 	add_child(hotbar)
@@ -91,3 +97,7 @@ func set_message(text: String) -> void:
 func set_active_bonuses_text(text: String) -> void:
 	if bonus_label != null:
 		bonus_label.text = text
+
+func set_deck_text(text: String) -> void:
+	if deck_label != null:
+		deck_label.text = text

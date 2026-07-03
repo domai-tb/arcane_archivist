@@ -22,6 +22,7 @@ var bonus_reward_heal: int = 0
 var bonus_vs_enemy_kind: String = ""
 var bonus_vs_enemy_kind_damage: int = 0
 var reward_relic_id: String = ""
+var reward_choice_bonus_count: int = 0
 var active_bonuses: Array[Dictionary] = []
 
 func to_dict() -> Dictionary:
@@ -47,6 +48,7 @@ func to_dict() -> Dictionary:
 		"bonus_vs_enemy_kind": bonus_vs_enemy_kind,
 		"bonus_vs_enemy_kind_damage": bonus_vs_enemy_kind_damage,
 		"reward_relic_id": reward_relic_id,
+		"reward_choice_bonus_count": reward_choice_bonus_count,
 		"active_bonuses": active_bonuses,
 	}
 
@@ -72,4 +74,5 @@ func from_dict(data: Dictionary) -> void:
 	bonus_vs_enemy_kind = str(data.get("bonus_vs_enemy_kind", ""))
 	bonus_vs_enemy_kind_damage = int(data.get("bonus_vs_enemy_kind_damage", 0))
 	reward_relic_id = str(data.get("reward_relic_id", ""))
+	reward_choice_bonus_count = int(data.get("reward_choice_bonus_count", 0))
 	active_bonuses = data.get("active_bonuses", [])

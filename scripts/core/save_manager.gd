@@ -1,23 +1,36 @@
 extends Node
 
 const SAVE_PATH := "user://arcane_archivist_save_0.json"
-const SAVE_VERSION := 2
+const SAVE_VERSION := 4
 
 func default_save_data() -> Dictionary:
 	return {
 		"save_version": SAVE_VERSION,
 		"active_request_id": "",
 		"completed_request_ids": [],
+		"request_queue": [],
+		"request_history": [],
+		"library_turn_count": 0,
+		"patron_reroll_count": 0,
+		"research_job": {},
+		"essence": 0,
+		"station_layout_id": "balanced",
+		"station_slots": [],
 		"archived_tome_ids": [],
 		"archived_relic_ids": [],
 		"archive_slots": [],
 		"active_archive_bonus_ids": [],
+		"owned_card_ids": [],
+		"active_deck_ids": [],
+		"unlocked_reward_card_ids": [],
+		"pending_card_reward_options": [],
+		"pending_card_reward_source": "",
 		"settings": {
 			"text_scale": 1.0,
 			"show_tooltips": true,
 		},
 		"debug": {
-			"last_opened_version": "0.2",
+			"last_opened_version": "0.4",
 		},
 	}
 

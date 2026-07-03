@@ -53,6 +53,7 @@ func _build_scene() -> void:
 	hud.setup(player)
 	hud.card_selected.connect(_on_card_selected)
 	hud.set_active_bonuses_text(app_state.get_active_archive_bonus_text())
+	hud.set_deck_text(app_state.get_active_deck_brief_text())
 
 	_sync_player_to_room(0)
 	_refresh_hud("The dive begins.")
@@ -164,19 +165,21 @@ func _on_card_selected(index: int) -> void:
 		_refresh_hud("%s is not ready." % card.name)
 		return
 
+	var runtime := ContentDB.get_card_runtime_data(card.id, app_state.get_active_archive_bonuses())
+	var cost := int(runtime.get("cost", card.cost))
 	if card.kind == "dash":
-		player.do_dash(_movement_direction(), card.move_bonus)
+		player.do_dash(_movement_direction(), float(runtime.get("move_bonus", card.move_bonus)))
 	elif card.kind == "strike":
-		_damage_nearest_enemy(card.power, card.reach)
+		_damage_nearest_enemy(float(runtime.get("power", card.power)), float(runtime.get("reach", card.reach)))
 	elif card.kind == "ward":
-		player.gain_shield(card.shield)
+		player.gain_shield(int(runtime.get("shield", card.shield)))
 	elif card.kind == "bolt":
-		_damage_nearest_enemy(card.power, card.reach)
+		_damage_nearest_enemy(float(runtime.get("power", card.power)), float(runtime.get("reach", card.reach)))
 	elif card.kind == "study":
-		player.restore_insight(card.insight_restore)
+		player.restore_insight(int(runtime.get("insight_restore", card.insight_restore)))
 
 	_reduce_cooldowns(0.5)
-	player.insight = max(0, player.insight - card.cost)
+	player.insight = max(0, player.insight - cost)
 	player.set_card_cooldown(card.id)
 	_refresh_hud("%s cast." % card.name)
 
@@ -229,7 +232,11 @@ func _refresh_hud(message: String) -> void:
 		hud.set_prompt_text("")
 	hud.set_message(message)
 	hud.set_active_bonuses_text(app_state.get_active_archive_bonus_text())
+	hud.set_deck_text(app_state.get_active_deck_brief_text())
 
 func _finish_run(success: bool, tome_id: String) -> void:
+	var main_scene = get_tree().current_scene
 	run_finished.emit(success, tome_id)
+	if main_scene != null and main_scene.has_method("show_hub"):
+		main_scene.show_hub()
 	queue_free()
