@@ -6,9 +6,16 @@ const KnowledgeTagDefinitionClass := preload("res://scripts/data/knowledge_tag_d
 const RequestDefinitionClass := preload("res://scripts/data/request_definition.gd")
 const RequestStateDefinitionClass := preload("res://scripts/data/request_state_definition.gd")
 const ResearchDefinitionClass := preload("res://scripts/data/research_definition.gd")
+const ArchiveWingDefinitionClass := preload("res://scripts/data/archive_wing_definition.gd")
+const CardVariantDefinitionClass := preload("res://scripts/data/card_variant_definition.gd")
+const CurseDefinitionClass := preload("res://scripts/data/curse_definition.gd")
+const PatronFactionDefinitionClass := preload("res://scripts/data/patron_faction_definition.gd")
 const StationDefinitionClass := preload("res://scripts/data/station_definition.gd")
+const ReplayRecordDefinitionClass := preload("res://scripts/data/replay_record_definition.gd")
+const RequestTemplateDefinitionClass := preload("res://scripts/data/request_template_definition.gd")
 const TomeDefinitionClass := preload("res://scripts/data/tome_definition.gd")
 const RelicDefinitionClass := preload("res://scripts/data/relic_definition.gd")
+const RelicSetDefinitionClass := preload("res://scripts/data/relic_set_definition.gd")
 const RoomTemplateDefinitionClass := preload("res://scripts/data/room_template_definition.gd")
 
 var knowledge_tags: Dictionary = {}
@@ -17,14 +24,28 @@ var enemies: Dictionary = {}
 var requests: Dictionary = {}
 var request_states: Dictionary = {}
 var research_definitions: Dictionary = {}
+var archive_wings: Dictionary = {}
+var card_variants: Dictionary = {}
+var curses: Dictionary = {}
+var patron_factions: Dictionary = {}
 var stations: Dictionary = {}
+var replay_records: Dictionary = {}
+var request_templates: Dictionary = {}
 var tomes: Dictionary = {}
 var relics: Dictionary = {}
+var relic_sets: Dictionary = {}
 var rooms: Dictionary = {}
 var knowledge_tag_order: Array[String] = []
 var request_state_order: Array[String] = []
 var research_order: Array[String] = []
+var archive_wing_order: Array[String] = []
+var card_variant_order: Array[String] = []
+var curse_order: Array[String] = []
+var patron_faction_order: Array[String] = []
 var station_order: Array[String] = []
+var replay_record_order: Array[String] = []
+var request_template_order: Array[String] = []
+var relic_set_order: Array[String] = []
 var archive_bonuses: Array[Dictionary] = []
 var starter_deck: Array[String] = [
 	"swift_step",
@@ -212,6 +233,175 @@ func get_station_runtime_data(id: String) -> Dictionary:
 		"essence_cost": int(station.essence_cost),
 		"adjacency_bonus_text": station.adjacency_bonus_text,
 		"adjacency_bonus_target_id": station.adjacency_bonus_target_id,
+	}
+
+func get_archive_wing(id: String):
+	return archive_wings.get(id)
+
+func get_archive_wing_ids() -> Array[String]:
+	return archive_wing_order.duplicate()
+
+func get_archive_wing_runtime_data(id: String) -> Dictionary:
+	var wing = get_archive_wing(id)
+	if wing == null:
+		return {}
+	return {
+		"id": wing.id,
+		"name": wing.name,
+		"description": wing.description,
+		"focus_knowledge_tag": wing.focus_knowledge_tag,
+		"specialization_path": wing.specialization_path,
+		"base_modifiers": wing.base_modifiers.duplicate(true),
+		"upgrade_tiers": wing.upgrade_tiers.duplicate(true),
+		"unlock_card_ids": wing.unlock_card_ids.duplicate(),
+		"unlock_request_ids": wing.unlock_request_ids.duplicate(),
+	}
+
+func get_relic_set(id: String):
+	return relic_sets.get(id)
+
+func get_relic_set_ids() -> Array[String]:
+	return relic_set_order.duplicate()
+
+func get_relic_set_runtime_data(id: String) -> Dictionary:
+	var relic_set = get_relic_set(id)
+	if relic_set == null:
+		return {}
+	return {
+		"id": relic_set.id,
+		"name": relic_set.name,
+		"description": relic_set.description,
+		"relic_ids": relic_set.relic_ids.duplicate(),
+		"bonuses": relic_set.bonuses.duplicate(true),
+	}
+
+func get_patron_faction(id: String):
+	return patron_factions.get(id)
+
+func get_patron_faction_ids() -> Array[String]:
+	return patron_faction_order.duplicate()
+
+func get_patron_faction_runtime_data(id: String) -> Dictionary:
+	var faction = get_patron_faction(id)
+	if faction == null:
+		return {}
+	return {
+		"id": faction.id,
+		"name": faction.name,
+		"description": faction.description,
+		"request_ids": faction.request_ids.duplicate(),
+		"reputation_tiers": faction.reputation_tiers.duplicate(true),
+		"ally_faction_ids": faction.ally_faction_ids.duplicate(),
+		"rival_faction_ids": faction.rival_faction_ids.duplicate(),
+		"tracked_tags": faction.tracked_tags.duplicate(),
+	}
+
+func get_curse(id: String):
+	return curses.get(id)
+
+func get_curse_ids() -> Array[String]:
+	return curse_order.duplicate()
+
+func get_curse_runtime_data(id: String) -> Dictionary:
+	var curse = get_curse(id)
+	if curse == null:
+		return {}
+	return {
+		"id": curse.id,
+		"name": curse.name,
+		"description": curse.description,
+		"family": curse.family,
+		"risk_text": curse.risk_text,
+		"reward_text": curse.reward_text,
+		"modifiers": curse.modifiers.duplicate(true),
+		"reward_essence": int(curse.reward_essence),
+		"reward_reputation": curse.reward_reputation.duplicate(true),
+		"incompatible_request_ids": curse.incompatible_request_ids.duplicate(),
+		"incompatible_room_types": curse.incompatible_room_types.duplicate(),
+		"incompatible_tags": curse.incompatible_tags.duplicate(),
+		"reward_record_ids": curse.reward_record_ids.duplicate(),
+	}
+
+func get_replay_record(id: String):
+	return replay_records.get(id)
+
+func get_replay_record_ids() -> Array[String]:
+	return replay_record_order.duplicate()
+
+func get_replay_record_runtime_data(id: String) -> Dictionary:
+	var record = get_replay_record(id)
+	if record == null:
+		return {}
+	return {
+		"id": record.id,
+		"name": record.name,
+		"description": record.description,
+		"category": record.category,
+		"summary_template": record.summary_template,
+		"tracked_fields": record.tracked_fields.duplicate(),
+		"display_tags": record.display_tags.duplicate(),
+	}
+
+func get_request_template(id: String):
+	return request_templates.get(id)
+
+func get_request_template_ids() -> Array[String]:
+	return request_template_order.duplicate()
+
+func get_request_template_runtime_data(id: String) -> Dictionary:
+	var template = get_request_template(id)
+	if template == null:
+		return {}
+	return {
+		"id": template.id,
+		"name": template.name,
+		"description": template.description,
+		"template_kind": template.template_kind,
+		"objective_text": template.objective_text,
+		"reward_text": template.reward_text,
+		"archive_reward_text": template.archive_reward_text,
+		"required_knowledge_tags": template.required_knowledge_tags.duplicate(),
+		"required_tome_ids": template.required_tome_ids.duplicate(),
+		"required_relic_ids": template.required_relic_ids.duplicate(),
+		"required_essence": int(template.required_essence),
+		"reward_essence": int(template.reward_essence),
+		"reward_card_ids": template.reward_card_ids.duplicate(),
+		"reward_room_ids": template.reward_room_ids.duplicate(),
+		"unlock_card_ids": template.unlock_card_ids.duplicate(),
+		"unlock_room_ids": template.unlock_room_ids.duplicate(),
+		"branch_reward_ids": template.branch_reward_ids.duplicate(),
+		"faction_id": template.faction_id,
+		"progression_rewards": template.progression_rewards.duplicate(true),
+	}
+
+func get_card_variant(id: String):
+	return card_variants.get(id)
+
+func get_card_variant_ids() -> Array[String]:
+	return card_variant_order.duplicate()
+
+func get_card_variant_runtime_data(id: String) -> Dictionary:
+	var variant = get_card_variant(id)
+	if variant == null:
+		return {}
+	return {
+		"id": variant.id,
+		"name": variant.name,
+		"description": variant.description,
+		"base_card_id": variant.base_card_id,
+		"variant_kind": variant.variant_kind,
+		"cost_delta": int(variant.cost_delta),
+		"cooldown_delta": float(variant.cooldown_delta),
+		"power_delta": float(variant.power_delta),
+		"reach_delta": float(variant.reach_delta),
+		"move_bonus_delta": float(variant.move_bonus_delta),
+		"shield_delta": int(variant.shield_delta),
+		"insight_restore_delta": int(variant.insight_restore_delta),
+		"projectile_speed_delta": float(variant.projectile_speed_delta),
+		"added_tags": variant.added_tags.duplicate(),
+		"removed_tags": variant.removed_tags.duplicate(),
+		"unlock_request_ids": variant.unlock_request_ids.duplicate(),
+		"unlock_reward_room_ids": variant.unlock_reward_room_ids.duplicate(),
 	}
 
 func get_tome(id: String):
@@ -471,6 +661,134 @@ func validate_content() -> Array[String]:
 	for station_id in station_order:
 		if get_station_definition(station_id) == null:
 			errors.append("Missing station id: %s" % station_id)
+	for wing_id in archive_wing_order:
+		var wing = get_archive_wing(wing_id)
+		if wing == null:
+			errors.append("Missing archive wing id: %s" % wing_id)
+			continue
+		if wing.focus_knowledge_tag != "" and get_knowledge_tag(wing.focus_knowledge_tag) == null:
+			errors.append("Invalid archive wing knowledge tag: %s on %s" % [wing.focus_knowledge_tag, wing_id])
+		for card_id in wing.unlock_card_ids:
+			if get_card(str(card_id)) == null:
+				errors.append("Invalid archive wing unlock card id: %s on %s" % [str(card_id), wing_id])
+		for request_id in wing.unlock_request_ids:
+			if get_request(str(request_id)) == null:
+				errors.append("Invalid archive wing unlock request id: %s on %s" % [str(request_id), wing_id])
+		for tier in wing.upgrade_tiers:
+			if typeof(tier) != TYPE_DICTIONARY:
+				errors.append("Invalid archive wing tier on %s." % wing_id)
+				continue
+			for card_id in tier.get("unlock_card_ids", []):
+				if get_card(str(card_id)) == null:
+					errors.append("Invalid archive wing tier unlock card id: %s on %s" % [str(card_id), wing_id])
+			for request_id in tier.get("unlock_request_ids", []):
+				if get_request(str(request_id)) == null:
+					errors.append("Invalid archive wing tier unlock request id: %s on %s" % [str(request_id), wing_id])
+	for relic_set_id in relic_set_order:
+		var relic_set = get_relic_set(relic_set_id)
+		if relic_set == null:
+			errors.append("Missing relic set id: %s" % relic_set_id)
+			continue
+		for relic_id in relic_set.relic_ids:
+			if get_relic(str(relic_id)) == null:
+				errors.append("Invalid relic set relic id: %s on %s" % [str(relic_id), relic_set_id])
+		for bonus in relic_set.bonuses:
+			if typeof(bonus) != TYPE_DICTIONARY:
+				errors.append("Invalid relic set bonus on %s." % relic_set_id)
+				continue
+			for card_id in bonus.get("reward_card_ids", []):
+				if get_card(str(card_id)) == null:
+					errors.append("Invalid relic set reward card id: %s on %s" % [str(card_id), relic_set_id])
+			for request_id in bonus.get("unlock_request_ids", []):
+				if get_request(str(request_id)) == null:
+					errors.append("Invalid relic set unlock request id: %s on %s" % [str(request_id), relic_set_id])
+	for faction_id in patron_faction_order:
+		var faction = get_patron_faction(faction_id)
+		if faction == null:
+			errors.append("Missing patron faction id: %s" % faction_id)
+			continue
+		for request_id in faction.request_ids:
+			if get_request(str(request_id)) == null:
+				errors.append("Invalid patron faction request id: %s on %s" % [str(request_id), faction_id])
+		for ally_id in faction.ally_faction_ids:
+			if ally_id != "" and get_patron_faction(str(ally_id)) == null:
+				errors.append("Invalid patron faction ally id: %s on %s" % [str(ally_id), faction_id])
+		for rival_id in faction.rival_faction_ids:
+			if rival_id != "" and get_patron_faction(str(rival_id)) == null:
+				errors.append("Invalid patron faction rival id: %s on %s" % [str(rival_id), faction_id])
+		for tier in faction.reputation_tiers:
+			if typeof(tier) != TYPE_DICTIONARY:
+				errors.append("Invalid patron faction tier on %s." % faction_id)
+				continue
+			for request_id in tier.get("unlock_request_ids", []):
+				if get_request(str(request_id)) == null:
+					errors.append("Invalid patron faction tier unlock request id: %s on %s" % [str(request_id), faction_id])
+			for card_id in tier.get("unlock_card_ids", []):
+				if get_card(str(card_id)) == null:
+					errors.append("Invalid patron faction tier unlock card id: %s on %s" % [str(card_id), faction_id])
+	for curse_id in curse_order:
+		var curse = get_curse(curse_id)
+		if curse == null:
+			errors.append("Missing curse id: %s" % curse_id)
+			continue
+		for request_id in curse.incompatible_request_ids:
+			if get_request(str(request_id)) == null:
+				errors.append("Invalid curse incompatible request id: %s on %s" % [str(request_id), curse_id])
+		for record_id in curse.reward_record_ids:
+			if get_replay_record(str(record_id)) == null:
+				errors.append("Invalid curse reward record id: %s on %s" % [str(record_id), curse_id])
+	for record_id in replay_record_order:
+		if get_replay_record(record_id) == null:
+			errors.append("Missing replay record id: %s" % record_id)
+	for template_id in request_template_order:
+		var template = get_request_template(template_id)
+		if template == null:
+			errors.append("Missing request template id: %s" % template_id)
+			continue
+		if template.faction_id != "" and get_patron_faction(template.faction_id) == null:
+			errors.append("Invalid request template faction id: %s on %s" % [template.faction_id, template_id])
+		for tag_id in template.required_knowledge_tags:
+			if get_knowledge_tag(str(tag_id)) == null:
+				errors.append("Invalid request template knowledge tag: %s on %s" % [str(tag_id), template_id])
+		for tome_id in template.required_tome_ids:
+			if get_tome(str(tome_id)) == null:
+				errors.append("Invalid request template tome id: %s on %s" % [str(tome_id), template_id])
+		for relic_id in template.required_relic_ids:
+			if get_relic(str(relic_id)) == null:
+				errors.append("Invalid request template relic id: %s on %s" % [str(relic_id), template_id])
+		for card_id in template.reward_card_ids:
+			if get_card(str(card_id)) == null:
+				errors.append("Invalid request template reward card id: %s on %s" % [str(card_id), template_id])
+		for room_id in template.reward_room_ids:
+			if get_room(str(room_id)) == null:
+				errors.append("Invalid request template reward room id: %s on %s" % [str(room_id), template_id])
+		for card_id in template.unlock_card_ids:
+			if get_card(str(card_id)) == null:
+				errors.append("Invalid request template unlock card id: %s on %s" % [str(card_id), template_id])
+		for room_id in template.unlock_room_ids:
+			if get_room(str(room_id)) == null:
+				errors.append("Invalid request template unlock room id: %s on %s" % [str(room_id), template_id])
+		if template.faction_id != "" and get_patron_faction(template.faction_id) == null:
+			errors.append("Invalid request template faction id: %s on %s" % [template.faction_id, template_id])
+		for branch_id in template.branch_reward_ids:
+			var branch_id_text := str(branch_id)
+			if branch_id_text == "":
+				errors.append("Empty request template branch reward id on %s." % template_id)
+			elif get_card(branch_id_text) == null and get_request(branch_id_text) == null and get_replay_record(branch_id_text) == null:
+				errors.append("Invalid request template branch reward id: %s on %s" % [branch_id_text, template_id])
+	for variant_id in card_variant_order:
+		var variant = get_card_variant(variant_id)
+		if variant == null:
+			errors.append("Missing card variant id: %s" % variant_id)
+			continue
+		if variant.base_card_id == "" or get_card(variant.base_card_id) == null:
+			errors.append("Invalid card variant base card id: %s on %s" % [variant.base_card_id, variant_id])
+		for request_id in variant.unlock_request_ids:
+			if get_request(str(request_id)) == null:
+				errors.append("Invalid card variant unlock request id: %s on %s" % [str(request_id), variant_id])
+		for room_id in variant.unlock_reward_room_ids:
+			if get_room(str(room_id)) == null:
+				errors.append("Invalid card variant unlock reward room id: %s on %s" % [str(room_id), variant_id])
 	for tome_id in tomes.keys():
 		if tome_id == "":
 			errors.append("Empty tome id found.")
@@ -499,6 +817,8 @@ func validate_content() -> Array[String]:
 			continue
 		if request.tome_id != "" and get_tome(request.tome_id) == null:
 			errors.append("Invalid request tome id: %s" % request.tome_id)
+		if request.faction_id != "" and get_patron_faction(request.faction_id) == null:
+			errors.append("Invalid request faction id: %s on %s" % [request.faction_id, request_id])
 		for tag_id in request.required_knowledge_tags:
 			if get_knowledge_tag(str(tag_id)) == null:
 				errors.append("Invalid request knowledge tag: %s on %s" % [str(tag_id), request_id])
@@ -520,6 +840,9 @@ func validate_content() -> Array[String]:
 		for room_id in request.unlock_room_ids:
 			if get_room(str(room_id)) == null:
 				errors.append("Invalid request unlock room id: %s on %s" % [str(room_id), request_id])
+		for wing_id in request.progression_rewards.get("unlock_wing_ids", []):
+			if get_archive_wing(str(wing_id)) == null:
+				errors.append("Invalid request progression wing id: %s on %s" % [str(wing_id), request_id])
 	for research_id in research_order:
 		var research = get_research_definition(research_id)
 		if research == null:
@@ -844,6 +1167,9 @@ func _build_content() -> void:
 	_add_card("ward_echo", "Ward Echo", "Let a shield rebound with a softer edge.", 1, 2.5, "ward", 0.0, 0.0, 0.0, 3, 0, 0.0, "defense", ["ward", "scholarly"], [])
 	_add_card("ink_reversal", "Ink Reversal", "Turn a marked opening into a slip of momentum.", 0, 2.2, "dash", 0.0, 0.0, 210.0, 0, 0, 0.0, "movement", ["quick", "scholarly"], [])
 	_add_card("lattice_bolt", "Lattice Bolt", "Fire a structured bolt that breaks lines cleanly.", 1, 2.3, "bolt", 2.0, 320.0, 0.0, 0, 0, 660.0, "offense", ["bolt", "ward"], [])
+	_add_card("wardline_sigil", "Wardline Sigil", "A ward-sign variant tuned for the Bastion Wing.", 1, 2.9, "ward", 0.0, 0.0, 0.0, 4, 0, 0.0, "defense", ["ward", "scholarly"], ["quiet_margin_audience"])
+	_add_card("sealed_step", "Sealed Step", "A swift-step variant that trades freedom for sturdier positioning.", 1, 1.4, "dash", 0.0, 0.0, 260.0, 0, 0, 0.0, "movement", ["quick", "ward"], ["quiet_margin_relay"])
+	_add_card("lattice_guard", "Lattice Guard", "A mirror-guard variant used once the faction chain reaches its final accord.", 1, 2.6, "ward", 0.0, 0.0, 0.0, 5, 1, 0.0, "defense", ["ward", "scholarly"], ["quiet_margin_accord"])
 
 	reward_card_pool = [
 		"ember_lance",
@@ -858,6 +1184,9 @@ func _build_content() -> void:
 		"ward_echo",
 		"ink_reversal",
 		"lattice_bolt",
+		"wardline_sigil",
+		"sealed_step",
+		"lattice_guard",
 	]
 
 	_add_enemy("mireling", "Mireling", "A small chaser that keeps moving.", 3, 55.0, 1, 24.0, 1.0, "melee", 0.0)
@@ -970,6 +1299,789 @@ func _build_content() -> void:
 		""
 	)
 
+	_add_archive_wing(
+		"astral_wing",
+		"Astral Wing",
+		"Specialize in foresight, reward choice, and smoother cooldowns.",
+		"astral_theory",
+		"foresight",
+		{"reward_choice_bonus_count": 1},
+		[
+			{
+				"id": "astral_gallery",
+				"name": "Observation Gallery",
+				"description": "Adds another reward preview and a bit more choice control.",
+				"essence_cost": 2,
+				"modifiers": {"reward_choice_bonus_count": 1},
+			},
+			{
+				"id": "astral_vault",
+				"name": "Star Vault",
+				"description": "Reduces cooldown pressure and improves study value.",
+				"essence_cost": 4,
+				"modifiers": {"cooldown_reduction_bonus": 0.25, "reward_heal_bonus": 1},
+			},
+			{
+				"id": "astral_lane",
+				"name": "Lens Lane",
+				"description": "A sharper layout that rewards focused offense.",
+				"essence_cost": 6,
+				"modifiers": {"card_damage_bonus": 1, "reward_heal_bonus": 1},
+			},
+		],
+		["astral_focus"],
+		["recover_moon_catalog"]
+	)
+	_add_archive_wing(
+		"beast_wing",
+		"Beast Wing",
+		"Specialize in resilience, close-range pressure, and safer dives.",
+		"beast_lore",
+		"survival",
+		{"starting_shield": 1},
+		[
+			{
+				"id": "beast_trail",
+				"name": "Trail Chamber",
+				"description": "Starts dives with more protection and recovery.",
+				"essence_cost": 2,
+				"modifiers": {"starting_shield": 1, "reward_heal_bonus": 1},
+			},
+			{
+				"id": "beast_trap",
+				"name": "Trap Gallery",
+				"description": "Improves pressure against tougher foes.",
+				"essence_cost": 4,
+				"modifiers": {"card_damage_bonus": 1, "bonus_vs_enemy_kind": "melee", "bonus_vs_enemy_kind_damage": 1},
+			},
+			{
+				"id": "beast_hunt",
+				"name": "Hunt Wing",
+				"description": "A broader reward spread for risky dives.",
+				"essence_cost": 6,
+				"modifiers": {"starting_shield": 1, "reward_choice_bonus_count": 1},
+			},
+		],
+		["beast_snare"],
+		["catalog_wildbark_bestiary"]
+	)
+	_add_archive_wing(
+		"ward_wing",
+		"Ward Wing",
+		"Specialize in protection, stability, and archive control.",
+		"wardcraft",
+		"containment",
+		{"starting_shield": 2},
+		[
+			{
+				"id": "ward_seal",
+				"name": "Seal Bay",
+				"description": "A sturdier start for tight dives.",
+				"essence_cost": 2,
+				"modifiers": {"starting_shield": 2},
+			},
+			{
+				"id": "ward_lattice",
+				"name": "Lattice Alcove",
+				"description": "Shaves cooldowns and favors defense.",
+				"essence_cost": 4,
+				"modifiers": {"cooldown_reduction_bonus": 0.25, "card_damage_bonus": 1},
+			},
+			{
+				"id": "ward_archive",
+				"name": "Archive Lock",
+				"description": "Improves reward reliability and resilience.",
+				"essence_cost": 6,
+				"modifiers": {"reward_choice_bonus_count": 1, "reward_heal_bonus": 1},
+			},
+		],
+		["ward_echo"],
+		["stabilize_ward_primer"]
+	)
+
+	_add_relic_set(
+		"quiet_stack",
+		"Quiet Stack",
+		"The archive remembers old paperwork and the hands that kept it together.",
+		["ashen_index", "gilded_ledger", "mothbone_charm"],
+		[
+			{"required_count": 1, "name": "Quiet Baseline", "modifiers": {"reward_heal_bonus": 1}},
+			{"required_count": 2, "name": "Quiet Pattern", "modifiers": {"reward_choice_bonus_count": 1}},
+			{"required_count": 3, "name": "Quiet Stack Complete", "modifiers": {"card_damage_bonus": 1}, "record_id": "relic_set_complete"},
+		]
+	)
+	_add_relic_set(
+		"warded_route",
+		"Warded Route",
+		"Tooling for corridors, keys, and walls that prefer to stay closed.",
+		["copper_atlas", "brass_key", "sealwax_matrix"],
+		[
+			{"required_count": 1, "name": "Mapped", "modifiers": {"starting_shield": 1}},
+			{"required_count": 2, "name": "Routed", "modifiers": {"cooldown_reduction_bonus": 0.25}},
+			{"required_count": 3, "name": "Secured", "modifiers": {"reward_choice_bonus_count": 1}, "record_id": "relic_set_complete"},
+		]
+	)
+	_add_relic_set(
+		"lunar_trace",
+		"Lunar Trace",
+		"Measurements that keep the sky aligned with the archive.",
+		["moon_catalog", "lunar_ribbon", "glass_lens"],
+		[
+			{"required_count": 1, "name": "Moonlit", "modifiers": {"reward_choice_bonus_count": 1}},
+			{"required_count": 2, "name": "Aligned", "modifiers": {"cooldown_reduction_bonus": 0.25}},
+			{"required_count": 3, "name": "Perfect Trace", "modifiers": {"reward_heal_bonus": 1}, "record_id": "relic_set_complete"},
+		]
+	)
+
+	_add_patron_faction(
+		"scholars",
+		"Scholars of the Quiet Stack",
+		"Archivists and researchers who care about lost texts.",
+		["recover_ashen_index", "recover_gilded_ledger", "recover_vellum_mirror", "recover_black_index", "prepare_astral_catalog"],
+		[
+			{"threshold": 3, "name": "Trusted", "modifiers": {"reward_choice_bonus_count": 1}},
+			{"threshold": 6, "name": "Preferred", "modifiers": {"cooldown_reduction_bonus": 0.25}},
+			{"threshold": 10, "name": "Inner Circle", "modifiers": {"card_damage_bonus": 1}, "record_id": "faction_milestone"},
+		],
+		[],
+		["wardens"],
+		["forbidden_history", "astral_theory"]
+	)
+	_add_patron_faction(
+		"wardens",
+		"Wardens of the Measuring Seal",
+		"Protective patrons who value containment and reliability.",
+		["recover_copper_atlas", "stabilize_ward_primer", "reinforce_ward_shelf", "seal_ink_containment"],
+		[
+			{"threshold": 3, "name": "Trusted", "modifiers": {"starting_shield": 1}},
+			{"threshold": 6, "name": "Preferred", "modifiers": {"reward_heal_bonus": 1}},
+			{"threshold": 10, "name": "Inner Circle", "modifiers": {"bonus_vs_enemy_kind": "melee", "bonus_vs_enemy_kind_damage": 1}, "record_id": "faction_milestone"},
+		],
+		["scholars"],
+		["fieldwardens"],
+		["wardcraft", "forbidden_history"]
+	)
+	_add_patron_faction(
+		"fieldwardens",
+		"Fieldwardens of the Living Shelf",
+		"Trackers who prefer bones, tracks, and living routes.",
+		["catalog_wildbark_bestiary", "survey_living_trail", "echoing_paths", "bone_patrol"],
+		[
+			{"threshold": 3, "name": "Trusted", "modifiers": {"reward_heal_bonus": 1}},
+			{"threshold": 6, "name": "Preferred", "modifiers": {"starting_shield": 1}},
+			{"threshold": 10, "name": "Inner Circle", "modifiers": {"reward_choice_bonus_count": 1}, "record_id": "faction_milestone"},
+		],
+		["wardens"],
+		[],
+		["beast_lore", "astral_theory"]
+	)
+
+	_add_curse(
+		"glass_shards",
+		"glass_family",
+		"Glass Shards",
+		"Enemies bite harder, but the archive rewards the risk.",
+		"Sharpness cuts both ways.",
+		"Better rewards for a brittle run.",
+		{"card_damage_bonus": 1},
+		1,
+		{},
+		[],
+		[],
+		["quick"],
+		[]
+	)
+	_add_curse(
+		"glass_reflection",
+		"glass_family",
+		"Reflection Loss",
+		"Cooldowns recover slower, but the archive learns faster.",
+		"Harder to settle, easier to profit.",
+		"Improved rewards from control play.",
+		{"cooldown_reduction_bonus": -0.25},
+		0,
+		{"scholars": 1},
+		[],
+		[],
+		["scholarly"],
+		[]
+	)
+	_add_curse(
+		"ink_tide",
+		"ink_family",
+		"Ink Tide",
+		"The dive starts with less certainty and a broader reward spread.",
+		"The page runs dark.",
+		"Risk opens wider choices.",
+		{"starting_shield": -1},
+		2,
+		{},
+		[],
+		["ink_pool"],
+		["scholarly"],
+		["curse_clear"]
+	)
+	_add_curse(
+		"ink_echo",
+		"ink_family",
+		"Ink Echo",
+		"Card recovery is noisier, but rare relics surface more often.",
+		"Expect drift.",
+		"More relic bias in the aftermath.",
+		{"reward_heal_bonus": -1},
+		0,
+		{},
+		[],
+		[],
+		["quick"],
+		[]
+	)
+	_add_curse(
+		"bone_drain",
+		"bone_family",
+		"Bone Drain",
+		"The run opens with less shield, but the archive records the win.",
+		"Hard on the body, good for the ledger.",
+		"Challenges leave a memorial entry.",
+		{"starting_shield": -1},
+		1,
+		{},
+		[],
+		[],
+		["heavy"],
+		["curse_clear"]
+	)
+	_add_curse(
+		"bone_patience",
+		"bone_family",
+		"Bone Patience",
+		"Longer cooldowns, steadier essence.",
+		"A slower rhythm with a cleaner end.",
+		"More essence after the run.",
+		{"cooldown_reduction_bonus": -0.25},
+		2,
+		{},
+		[],
+		[],
+		["ward"],
+		[]
+	)
+
+	_add_replay_record("wing_unlock", "Wing Unlock", "Unlocked or upgraded a wing specialization.", "progression", "Wing unlocked: {wing_name}", ["wing"], ["progression"])
+	_add_replay_record("relic_set_complete", "Relic Set Complete", "Completed a relic set bonus.", "collection", "Relic set complete: {set_name}", ["set"], ["archive"])
+	_add_replay_record("faction_milestone", "Faction Milestone", "Reached a notable faction reputation threshold.", "reputation", "Faction milestone: {faction_name}", ["faction"], ["social"])
+	_add_replay_record("curse_clear", "Curse Clear", "Cleared a dive while a curse was active.", "challenge", "Curse cleared: {curse_name}", ["curse"], ["challenge"])
+	_add_replay_record("recorded_request_chain", "Request Chain", "Completed a branch of related patron requests.", "progression", "Request chain: {request_name}", ["request"], ["progression"])
+	_add_replay_record("rare_archive_entry", "Rare Archive Entry", "Recorded a noteworthy archive state.", "archive", "Archive record: {summary}", ["archive"], ["archive"])
+
+	_add_card_variant("ember_lance_echo", "Ember Lance Echo", "A sharper but shorter arc for Ember Lance.", "ember_lance", "variant", 0, -0.1, 1.0, 0.0, 0.0, 0, 0, 0.0, ["flame"], [], [])
+	_add_card_variant("mirror_guard_shield", "Mirror Guard Shield", "A heavier guard that starts stronger.", "mirror_guard", "variant", 0, 0.0, 0.0, 0.0, 0.0, 1, 0, 0.0, ["ward"], [], [])
+	_add_card_variant("arc_bolt_long", "Arc Bolt Longshot", "A longer shot with a cleaner opening.", "arc_bolt", "variant", 0, 0.0, 0.0, 40.0, 0.0, 0, 0, 40.0, ["bolt"], [], [])
+	_add_card_variant("ward_echo_lens", "Ward Echo Lens", "A more scholarly ward that steadies insight.", "ward_echo", "variant", 0, 0.0, 0.0, 0.0, 0.0, 0, 1, 0.0, ["scholarly"], [], [])
+
+	_add_request_template(
+		"prepare_astral_catalog",
+		"Prepare Astral Catalog",
+		"Organize lunar observations into a usable archive packet.",
+		"faction",
+		"Create an aligned catalog for the scholars.",
+		"The scholars respond with new favor.",
+		"The archive remembers the catalog work.",
+		["astral_theory"],
+		["moon_catalog"],
+		[],
+		0,
+		2,
+		["astral_focus"],
+		[],
+		["astral_focus"],
+		[],
+		"scholars",
+		{"faction_reputation": {"scholars": 1}}
+	)
+	_add_request_template(
+		"reinforce_ward_shelf",
+		"Reinforce Ward Shelf",
+		"Rebuild the archival shelf with better seal geometry.",
+		"faction",
+		"Reinforce the warded shelves and keep the stacks stable.",
+		"The wardens record the work.",
+		"The archive remembers the reinforcement.",
+		["wardcraft"],
+		["copper_atlas"],
+		["sealwax_matrix"],
+		1,
+		3,
+		["ward_echo"],
+		[],
+		[],
+		["ward_echo"],
+		"wardens",
+		{"faction_reputation": {"wardens": 1}}
+	)
+	_add_request_template(
+		"survey_living_trail",
+		"Survey Living Trail",
+		"Mark the safer route through a shifting route of tracks and pages.",
+		"faction",
+		"Mark the living path for fieldwardens.",
+		"The fieldwardens gain a better trail.",
+		"The archive remembers the survey.",
+		["beast_lore"],
+		["wildbark_bestiary"],
+		["bramble_horn_sample"],
+		0,
+		2,
+		["beast_snare"],
+		[],
+		[],
+		[],
+		"fieldwardens",
+		{"faction_reputation": {"fieldwardens": 1}}
+	)
+	_add_request_template(
+		"seal_ink_containment",
+		"Seal Ink Containment",
+		"Close a spill of impossible ink and catalog the aftermath.",
+		"curse",
+		"Contain the ink before it spreads again.",
+		"The archive keeps the sealed sample.",
+		"The archive remembers the containment trial.",
+		["forbidden_history"],
+		["black_index"],
+		["void_ink_vial"],
+		0,
+		3,
+		["sigil_chart"],
+		[],
+		[],
+		["sigil_chart"],
+		"scholars",
+		{"faction_reputation": {"scholars": 1}, "unlock_curse_ids": ["ink_tide"]}
+	)
+
+	_add_archive_wing(
+		"wardwing_bastion",
+		"Bastion Wing",
+		"A ward-focused wing that turns the archive into a defended route instead of a universal upgrade pile.",
+		"wardcraft",
+		"wardcraft_bastion",
+		{
+			"station_slots": 1,
+			"relic_capacity": 1,
+		},
+		[
+			{
+				"tier": 1,
+				"name": "Threshold Shelves",
+				"description": "Ward cards gain extra shielding and the first wing slot opens.",
+				"required_essence": 1,
+				"modifiers": {
+					"station_slots": 1,
+					"card_modifiers": [
+						{"tag": "ward", "shield_bonus": 1},
+					],
+				},
+				"unlock_card_ids": ["wardline_sigil"],
+			},
+			{
+				"tier": 2,
+				"name": "Interlocked Galleries",
+				"description": "The wing starts to favor faster setup and deeper storage.",
+				"required_essence": 2,
+				"modifiers": {
+					"relic_capacity": 1,
+					"card_modifiers": [
+						{"tag": "ward", "shield_bonus": 1},
+						{"tag": "quick", "cooldown_bonus": -0.2},
+					],
+				},
+				"unlock_request_ids": ["quiet_margin_relay"],
+			},
+			{
+				"tier": 3,
+				"name": "Sanctum Index",
+				"description": "Defense and scholarship become the wing's default posture.",
+				"required_essence": 3,
+				"modifiers": {
+					"station_slots": 1,
+					"relic_capacity": 1,
+					"card_modifiers": [
+						{"tag": "defense", "shield_bonus": 1},
+						{"tag": "scholarly", "cost_reduction": 1},
+					],
+				},
+				"unlock_card_ids": ["lattice_guard"],
+				"unlock_request_ids": ["quiet_margin_accord"],
+			},
+		],
+		["wardline_sigil", "sealed_step", "lattice_guard"],
+		["quiet_margin_audience", "quiet_margin_relay", "quiet_margin_accord"]
+	)
+
+	_add_relic_set(
+		"sealbound_triad",
+		"Sealbound Triad",
+		"Three ward relics that reward disciplined placement and layered defenses.",
+		["brass_key", "threaded_sigil", "ivory_mark"],
+		[
+			{
+				"threshold": 2,
+				"name": "Interlocked Protection",
+				"description": "Two pieces make warded cards sturdier and less fragile to play around.",
+				"modifiers": {
+					"card_modifiers": [
+						{"tag": "ward", "shield_bonus": 1},
+						{"tag": "defense", "shield_bonus": 1},
+					],
+				},
+				"reward_card_ids": ["wardline_sigil"],
+			},
+			{
+				"threshold": 3,
+				"name": "Sanctum Circuit",
+				"description": "The complete triad converts motion and study into a tighter loop.",
+				"modifiers": {
+					"card_modifiers": [
+						{"tag": "quick", "move_bonus": 40},
+						{"tag": "scholarly", "insight_restore_bonus": 1},
+					],
+				},
+				"reward_card_ids": ["sealed_step"],
+				"unlock_request_ids": ["quiet_margin_accord"],
+			},
+		]
+	)
+
+	_add_patron_faction(
+		"quiet_margin_conclave",
+		"Quiet Margin Conclave",
+		"A patron faction that values ordered shelves, sealed routes, and reversible losses.",
+		["quiet_margin_audience", "quiet_margin_relay", "quiet_margin_accord"],
+		[
+			{
+				"tier": 1,
+				"name": "Audience",
+				"description": "The conclave starts trusting the archive's ward work.",
+				"reputation": 1,
+				"reward_essence": 1,
+				"unlock_card_ids": ["wardline_sigil"],
+			},
+			{
+				"tier": 2,
+				"name": "Relay",
+				"description": "They begin forwarding better routes and cleaner requests.",
+				"reputation": 3,
+				"reward_essence": 2,
+				"unlock_card_ids": ["sealed_step"],
+			},
+			{
+				"tier": 3,
+				"name": "Accord",
+				"description": "The faction grants enough confidence to reshape the wing itself.",
+				"reputation": 5,
+				"reward_essence": 3,
+				"unlock_card_ids": ["lattice_guard"],
+			},
+		],
+		[],
+		[],
+		["wardcraft"]
+	)
+
+	_add_curse(
+		"smudged_margin",
+		"ink_burden",
+		"Smudged Margin",
+		"Ink thickens around the edges of a dive and blurs the safest lines.",
+		"Rooms fill with cluttered pressure and slower decisions.",
+		"Clearing the curse returns extra essence and a replay note.",
+		{
+			"archive_pressure": 1,
+			"reward_essence_bonus": 2,
+		},
+		2,
+		{"quiet_margin_conclave": 1},
+		[],
+		["reward"],
+		["clutter", "tutorial"],
+		["record_curse_clear"]
+	)
+	_add_curse(
+		"blackout_margin",
+		"ink_burden",
+		"Blackout Margin",
+		"The archive goes dim enough that careless dives lose the shape of a route.",
+		"Optional rooms become riskier but the reward table gets heavier.",
+		"Clearing the curse records a faction-friendly accomplishment.",
+		{
+			"hazard_density": 1,
+			"rare_relic_chance": 1,
+		},
+		3,
+		{"quiet_margin_conclave": 1},
+		[],
+		[],
+		["story_critical"],
+		["record_faction_milestone"]
+	)
+	_add_curse(
+		"redacted_margin",
+		"ink_burden",
+		"Redacted Margin",
+		"Whole paragraphs vanish, forcing the player to commit to a narrower plan.",
+		"Card choice quality improves if the dive survives the redaction.",
+		"Clearing the curse grants a record for the wing path.",
+		{
+			"request_delay": 2,
+			"card_choice_bonus": 1,
+		},
+		4,
+		{"quiet_margin_conclave": 1},
+		["recover_black_index"],
+		[],
+		[],
+		["record_wing_upgrade"]
+	)
+
+	_add_replay_record(
+		"record_wing_upgrade",
+		"Wing Upgrade",
+		"Tracks the highest archive wing tier reached in a run or save.",
+		"wing",
+		"{wing_name} reached tier {tier}.",
+		["wing_id", "tier", "wing_name"],
+		["wing", "progression"]
+	)
+	_add_replay_record(
+		"record_relic_set",
+		"Relic Set Completion",
+		"Tracks completion of a named relic family.",
+		"relic_set",
+		"{set_name} completed with {completed_relic_count}/{total_relic_count} relics.",
+		["relic_set_id", "completed_relic_count", "total_relic_count", "set_name"],
+		["relic", "set"]
+	)
+	_add_replay_record(
+		"record_faction_milestone",
+		"Faction Milestone",
+		"Tracks a notable reputation break in a patron chain.",
+		"faction",
+		"{faction_name} reached reputation {reputation}.",
+		["faction_id", "reputation", "faction_name"],
+		["faction", "reputation"]
+	)
+	_add_replay_record(
+		"record_curse_clear",
+		"Curse Clear",
+		"Tracks a successful run completed under one optional curse.",
+		"curse",
+		"{curse_name} was cleared on the way out.",
+		["curse_id", "curse_name"],
+		["curse", "clear"]
+	)
+	_add_replay_record(
+		"record_request_chain",
+		"Request Chain",
+		"Tracks a completed multi-step request chain.",
+		"request_chain",
+		"{chain_name} finished across {step_count} steps.",
+		["chain_id", "chain_name", "step_count"],
+		["request", "chain"]
+	)
+	_add_replay_record(
+		"record_rare_unlock",
+		"Rare Unlock",
+		"Tracks any rare content unlock granted by progression.",
+		"unlock",
+		"{content_name} unlocked for future runs.",
+		["content_id", "content_name", "unlock_source"],
+		["unlock", "rare"]
+	)
+
+	_add_request_template(
+		"quiet_margin_audience_template",
+		"Quiet Margin Audience",
+		"A patron request template for establishing the first trust step in a faction chain.",
+		"faction",
+		"Deliver a ward sample and prove the archive can hold the line.",
+		"The conclave pays in essence and a guarded card pattern.",
+		"The archive remembers the first warding favor.",
+		["wardcraft"],
+		[],
+		["sealwax_matrix"],
+		1,
+		2,
+		["wardline_sigil"],
+		[],
+		["wardline_sigil"],
+		[],
+		"quiet_margin_conclave",
+		{"faction_reputation": {"quiet_margin_conclave": 1}},
+		["record_faction_milestone"]
+	)
+	_add_request_template(
+		"quiet_margin_relay_template",
+		"Quiet Margin Relay",
+		"A patron request template for routing work through a calmer second step.",
+		"faction",
+		"Bring back a corridor map and the supplies to seal it.",
+		"The conclave pays in essence and a faster movement pattern.",
+		"The archive remembers the relay favor.",
+		["wardcraft"],
+		["copper_atlas"],
+		["threaded_sigil"],
+		1,
+		2,
+		["sealed_step"],
+		[],
+		["sealed_step"],
+		[],
+		"quiet_margin_conclave",
+		{"faction_reputation": {"quiet_margin_conclave": 1}},
+		["record_request_chain"]
+	)
+	_add_request_template(
+		"quiet_margin_accord_template",
+		"Quiet Margin Accord",
+		"A patron request template for the final wing commitment in the chain.",
+		"faction",
+		"Return the highest-value ward relics and prove the wing can specialize.",
+		"The conclave pays in essence and a final defensive card pattern.",
+		"The archive remembers the accord.",
+		["wardcraft"],
+		["copper_atlas", "ward_primer"],
+		["ivory_mark"],
+		2,
+		3,
+		["lattice_guard"],
+		[],
+		["lattice_guard"],
+		[],
+		"quiet_margin_conclave",
+		{"faction_reputation": {"quiet_margin_conclave": 2}},
+		["record_wing_upgrade"]
+	)
+
+	_add_card_variant(
+		"wardline_sigil",
+		"Wardline Sigil",
+		"A ward-sign variant tuned for the Bastion Wing.",
+		"ward_sign",
+		"wing_upgrade",
+		0,
+		0.0,
+		0.0,
+		0.0,
+		0.0,
+		1,
+		0,
+		0.0,
+		["ward", "scholarly"],
+		[],
+		["quiet_margin_audience"],
+		[]
+	)
+	_add_card_variant(
+		"sealed_step",
+		"Sealed Step",
+		"A swift-step variant that trades freedom for sturdier positioning.",
+		"swift_step",
+		"relic_set",
+		0,
+		-0.1,
+		0.0,
+		0.0,
+		40.0,
+		0,
+		0,
+		0.0,
+		["quick", "ward"],
+		[],
+		["quiet_margin_relay"],
+		[]
+	)
+	_add_card_variant(
+		"lattice_guard",
+		"Lattice Guard",
+		"A mirror-guard variant used once the faction chain reaches its final accord.",
+		"mirror_guard",
+		"faction_reward",
+		0,
+		0.0,
+		0.0,
+		0.0,
+		0.0,
+		1,
+		1,
+		0.0,
+		["ward", "scholarly"],
+		[],
+		["quiet_margin_accord"],
+		[]
+	)
+
+	_add_request(
+		"quiet_margin_audience",
+		"Quiet Margin Audience",
+		"ward_primer",
+		"Deliver a ward sample and prove the archive can hold the line.",
+		"The conclave pays in essence and a guarded card pattern.",
+		"The archive remembers the first warding favor.",
+		2,
+		["wardcraft"],
+		[],
+		["sealwax_matrix"],
+		0,
+		2,
+		["wardline_sigil"],
+		[],
+		["wardline_sigil"],
+		[],
+		"quiet_margin_conclave",
+		{"faction_reputation": {"quiet_margin_conclave": 1}, "wing_progression": {"wardwing_bastion": 1}}
+	)
+	_add_request(
+		"quiet_margin_relay",
+		"Quiet Margin Relay",
+		"copper_atlas",
+		"Bring back a corridor map and the supplies to seal it.",
+		"The conclave pays in essence and a faster movement pattern.",
+		"The archive remembers the relay favor.",
+		3,
+		["wardcraft"],
+		["ward_primer"],
+		["threaded_sigil"],
+		1,
+		2,
+		["sealed_step"],
+		[],
+		["sealed_step"],
+		[],
+		"quiet_margin_conclave",
+		{"faction_reputation": {"quiet_margin_conclave": 1}, "wing_progression": {"wardwing_bastion": 1}}
+	)
+	_add_request(
+		"quiet_margin_accord",
+		"Quiet Margin Accord",
+		"copper_atlas",
+		"Return the highest-value ward relics and prove the wing can specialize.",
+		"The conclave pays in essence and a final defensive card pattern.",
+		"The archive remembers the accord.",
+		4,
+		["wardcraft"],
+		["ward_primer", "copper_atlas"],
+		["ivory_mark"],
+		2,
+		3,
+		["lattice_guard"],
+		[],
+		["lattice_guard"],
+		[],
+		"quiet_margin_conclave",
+		{"faction_reputation": {"quiet_margin_conclave": 2}, "wing_progression": {"wardwing_bastion": 2}, "unlock_wing_ids": ["wardwing_bastion"], "record_kind": "wing_unlock"}
+	)
+
 	request_order = [
 		"recover_ashen_index",
 		"recover_gilded_ledger",
@@ -979,6 +2091,9 @@ func _build_content() -> void:
 		"recover_black_index",
 		"catalog_wildbark_bestiary",
 		"stabilize_ward_primer",
+		"quiet_margin_audience",
+		"quiet_margin_relay",
+		"quiet_margin_accord",
 	]
 	request_state_order = ["queued", "active", "in_progress", "completed", "expired"]
 	knowledge_tag_order = ["forbidden_history", "beast_lore", "astral_theory", "wardcraft"]
@@ -989,8 +2104,26 @@ func _build_content() -> void:
 		"research_wardcraft",
 	]
 	station_order = ["request_board", "research_desk", "archive_shelf", "essence_lamp"]
+	archive_wing_order = ["wardwing_bastion"]
+	relic_set_order = ["sealbound_triad"]
+	patron_faction_order = ["quiet_margin_conclave"]
+	curse_order = ["smudged_margin", "blackout_margin", "redacted_margin"]
+	replay_record_order = [
+		"record_wing_upgrade",
+		"record_relic_set",
+		"record_faction_milestone",
+		"record_curse_clear",
+		"record_request_chain",
+		"record_rare_unlock",
+	]
+	request_template_order = [
+		"quiet_margin_audience_template",
+		"quiet_margin_relay_template",
+		"quiet_margin_accord_template",
+	]
+	card_variant_order = ["wardline_sigil", "sealed_step", "lattice_guard"]
 
-func _add_request(id: String, request_name: String, tome_id: String, objective_text: String, reward_text: String, archive_reward_text: String, deadline_turns: int = 0, required_knowledge_tags: Array[String] = [], required_tome_ids: Array[String] = [], required_relic_ids: Array[String] = [], required_essence: int = 0, reward_essence: int = 0, reward_card_ids: Array[String] = [], reward_room_ids: Array[String] = [], unlock_card_ids: Array[String] = [], unlock_room_ids: Array[String] = []) -> void:
+func _add_request(id: String, request_name: String, tome_id: String, objective_text: String, reward_text: String, archive_reward_text: String, deadline_turns: int = 0, required_knowledge_tags: Array[String] = [], required_tome_ids: Array[String] = [], required_relic_ids: Array[String] = [], required_essence: int = 0, reward_essence: int = 0, reward_card_ids: Array[String] = [], reward_room_ids: Array[String] = [], unlock_card_ids: Array[String] = [], unlock_room_ids: Array[String] = [], faction_id: String = "", progression_rewards: Dictionary = {}) -> void:
 	var request := RequestDefinitionClass.new()
 	request.id = id
 	request.name = request_name
@@ -1008,6 +2141,8 @@ func _add_request(id: String, request_name: String, tome_id: String, objective_t
 	request.reward_room_ids = reward_room_ids
 	request.unlock_card_ids = unlock_card_ids
 	request.unlock_room_ids = unlock_room_ids
+	request.faction_id = faction_id
+	request.progression_rewards = progression_rewards
 	requests[id] = request
 
 func _add_knowledge_tag(id: String, tag_name: String, description: String, category: String, ui_color: String) -> void:
@@ -1096,6 +2231,32 @@ func _add_station_definition(id: String, station_name: String, description: Stri
 	if not station_order.has(id):
 		station_order.append(id)
 
+func _add_archive_wing(id: String, wing_name: String, description: String, focus_knowledge_tag: String, specialization_path: String, base_modifiers: Dictionary, upgrade_tiers: Array[Dictionary], unlock_card_ids: Array[String] = [], unlock_request_ids: Array[String] = []) -> void:
+	var wing := ArchiveWingDefinitionClass.new()
+	wing.id = id
+	wing.name = wing_name
+	wing.description = description
+	wing.focus_knowledge_tag = focus_knowledge_tag
+	wing.specialization_path = specialization_path
+	wing.base_modifiers = base_modifiers
+	wing.upgrade_tiers = upgrade_tiers
+	wing.unlock_card_ids = unlock_card_ids
+	wing.unlock_request_ids = unlock_request_ids
+	archive_wings[id] = wing
+	if not archive_wing_order.has(id):
+		archive_wing_order.append(id)
+
+func _add_relic_set(id: String, set_name: String, description: String, relic_ids: Array[String], bonuses: Array[Dictionary]) -> void:
+	var relic_set := RelicSetDefinitionClass.new()
+	relic_set.id = id
+	relic_set.name = set_name
+	relic_set.description = description
+	relic_set.relic_ids = relic_ids
+	relic_set.bonuses = bonuses
+	relic_sets[id] = relic_set
+	if not relic_set_order.has(id):
+		relic_set_order.append(id)
+
 func _add_card(id: String, card_name: String, description: String, cost: int, cooldown: float, kind: String, damage: float, card_reach: float, move_bonus: float, shield: int, insight_restore: int, projectile_speed: float, role: String = "", tags: Array[String] = [], unlock_request_ids: Array[String] = []) -> void:
 	var card := CardDefinitionClass.new()
 	card.id = id
@@ -1150,3 +2311,97 @@ func _add_room(id: String, room_name: String, room_type: String, enemy_ids: Arra
 	room.hazard_kind = hazard_kind
 	room.reward_kind = reward_kind
 	rooms[id] = room
+
+func _add_patron_faction(id: String, faction_name: String, description: String, request_ids: Array[String] = [], reputation_tiers: Array[Dictionary] = [], ally_faction_ids: Array[String] = [], rival_faction_ids: Array[String] = [], tracked_tags: Array[String] = []) -> void:
+	var faction := PatronFactionDefinitionClass.new()
+	faction.id = id
+	faction.name = faction_name
+	faction.description = description
+	faction.request_ids = request_ids
+	faction.reputation_tiers = reputation_tiers
+	faction.ally_faction_ids = ally_faction_ids
+	faction.rival_faction_ids = rival_faction_ids
+	faction.tracked_tags = tracked_tags
+	patron_factions[id] = faction
+	if not patron_faction_order.has(id):
+		patron_faction_order.append(id)
+
+func _add_curse(id: String, family: String, curse_name: String, description: String, risk_text: String, reward_text: String, modifiers: Dictionary = {}, reward_essence: int = 0, reward_reputation: Dictionary = {}, incompatible_request_ids: Array[String] = [], incompatible_room_types: Array[String] = [], incompatible_tags: Array[String] = [], reward_record_ids: Array[String] = []) -> void:
+	var curse := CurseDefinitionClass.new()
+	curse.id = id
+	curse.family = family
+	curse.name = curse_name
+	curse.description = description
+	curse.risk_text = risk_text
+	curse.reward_text = reward_text
+	curse.modifiers = modifiers
+	curse.reward_essence = reward_essence
+	curse.reward_reputation = reward_reputation
+	curse.incompatible_request_ids = incompatible_request_ids
+	curse.incompatible_room_types = incompatible_room_types
+	curse.incompatible_tags = incompatible_tags
+	curse.reward_record_ids = reward_record_ids
+	curses[id] = curse
+	if not curse_order.has(id):
+		curse_order.append(id)
+
+func _add_replay_record(id: String, record_name: String, description: String, category: String, summary_template: String, tracked_fields: Array[String] = [], display_tags: Array[String] = []) -> void:
+	var record := ReplayRecordDefinitionClass.new()
+	record.id = id
+	record.name = record_name
+	record.description = description
+	record.category = category
+	record.summary_template = summary_template
+	record.tracked_fields = tracked_fields
+	record.display_tags = display_tags
+	replay_records[id] = record
+	if not replay_record_order.has(id):
+		replay_record_order.append(id)
+
+func _add_request_template(id: String, template_name: String, description: String, template_kind: String, objective_text: String, reward_text: String, archive_reward_text: String, required_knowledge_tags: Array[String] = [], required_tome_ids: Array[String] = [], required_relic_ids: Array[String] = [], required_essence: int = 0, reward_essence: int = 0, reward_card_ids: Array[String] = [], reward_room_ids: Array[String] = [], unlock_card_ids: Array[String] = [], unlock_room_ids: Array[String] = [], faction_id: String = "", progression_rewards: Dictionary = {}, branch_reward_ids: Array[String] = []) -> void:
+	var template := RequestTemplateDefinitionClass.new()
+	template.id = id
+	template.name = template_name
+	template.description = description
+	template.template_kind = template_kind
+	template.objective_text = objective_text
+	template.reward_text = reward_text
+	template.archive_reward_text = archive_reward_text
+	template.required_knowledge_tags = required_knowledge_tags
+	template.required_tome_ids = required_tome_ids
+	template.required_relic_ids = required_relic_ids
+	template.required_essence = required_essence
+	template.reward_essence = reward_essence
+	template.reward_card_ids = reward_card_ids
+	template.reward_room_ids = reward_room_ids
+	template.unlock_card_ids = unlock_card_ids
+	template.unlock_room_ids = unlock_room_ids
+	template.faction_id = faction_id
+	template.progression_rewards = progression_rewards
+	template.branch_reward_ids = branch_reward_ids
+	request_templates[id] = template
+	if not request_template_order.has(id):
+		request_template_order.append(id)
+
+func _add_card_variant(id: String, variant_name: String, description: String, base_card_id: String, variant_kind: String, cost_delta: int = 0, cooldown_delta: float = 0.0, power_delta: float = 0.0, reach_delta: float = 0.0, move_bonus_delta: float = 0.0, shield_delta: int = 0, insight_restore_delta: int = 0, projectile_speed_delta: float = 0.0, added_tags: Array[String] = [], removed_tags: Array[String] = [], unlock_request_ids: Array[String] = [], unlock_reward_room_ids: Array[String] = []) -> void:
+	var variant := CardVariantDefinitionClass.new()
+	variant.id = id
+	variant.name = variant_name
+	variant.description = description
+	variant.base_card_id = base_card_id
+	variant.variant_kind = variant_kind
+	variant.cost_delta = cost_delta
+	variant.cooldown_delta = cooldown_delta
+	variant.power_delta = power_delta
+	variant.reach_delta = reach_delta
+	variant.move_bonus_delta = move_bonus_delta
+	variant.shield_delta = shield_delta
+	variant.insight_restore_delta = insight_restore_delta
+	variant.projectile_speed_delta = projectile_speed_delta
+	variant.added_tags = added_tags
+	variant.removed_tags = removed_tags
+	variant.unlock_request_ids = unlock_request_ids
+	variant.unlock_reward_room_ids = unlock_reward_room_ids
+	card_variants[id] = variant
+	if not card_variant_order.has(id):
+		card_variant_order.append(id)

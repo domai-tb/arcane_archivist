@@ -1,10 +1,39 @@
 extends CanvasLayer
 class_name HubHud
 
+signal pre_dive_confirmed(request_id: String, curse_id: String)
+
 const ARCHIVE_SLOT_COUNT := 6
 const HUD_MARGIN := 18
 const INFO_PANEL_WIDTH := 320
 const DETAIL_PANEL_HEIGHT := 132
+const CURSE_FAMILY_NAME := "Ashen Challenge"
+const CURSE_OPTIONS := [
+	{
+		"id": "curse_blackout",
+		"name": "Blackout Ledger",
+		"risk": "Optional rooms become riskier to explore.",
+		"reward": "Records note the clear as a higher-risk dive.",
+	},
+	{
+		"id": "curse_shrinking_margin",
+		"name": "Shrinking Margin",
+		"risk": "The dive starts with less room for error.",
+		"reward": "The preview flags a sharper reward track.",
+	},
+	{
+		"id": "curse_static_echo",
+		"name": "Static Echo",
+		"risk": "Card cadence feels tighter in the preview.",
+		"reward": "The archive notes a stronger relic pursuit.",
+	},
+	{
+		"id": "curse_salt_draft",
+		"name": "Salt Draft",
+		"risk": "Recovery feels slower in the preview text.",
+		"reward": "The run history marks a cleaner extraction route.",
+	},
+]
 
 var app_state = null
 var content_db = null
@@ -39,6 +68,37 @@ var deck_buttons: Array = []
 var collection_buttons: Array = []
 var reward_buttons: Array = []
 var station_layout_buttons: Array = []
+var section_buttons: Array = []
+var section_panels: Dictionary = {}
+var active_section_id: String = "archive"
+var selected_curse_id: String = ""
+var selected_upgrade_layout_id: String = ""
+var selected_progression_tag_id: String = ""
+var pre_dive_request_id: String = ""
+var progression_summary_label: Label
+var progression_grid: GridContainer
+var progression_detail_label: Label
+var progression_buttons: Array = []
+var curses_summary_label: Label
+var curse_grid: GridContainer
+var curse_detail_label: Label
+var curse_buttons: Array = []
+var records_summary_label: Label
+var records_grid: VBoxContainer
+var copy_records_button: Button
+var upgrade_summary_label: Label
+var upgrade_grid: GridContainer
+var upgrade_detail_label: Label
+var apply_upgrade_button: Button
+var upgrade_buttons: Array = []
+var pre_dive_panel: PanelContainer
+var pre_dive_request_label: Label
+var pre_dive_bonus_label: Label
+var pre_dive_curse_label: Label
+var pre_dive_detail_label: Label
+var pre_dive_curse_grid: GridContainer
+var pre_dive_confirm_button: Button
+var pre_dive_cancel_button: Button
 var selected_item_type: String = ""
 var selected_item_id: String = ""
 var selected_collection_card_id: String = ""
@@ -49,6 +109,9 @@ var selected_reward_card_id: String = ""
 func setup(new_app_state, new_content_db) -> void:
 	app_state = new_app_state
 	content_db = new_content_db
+	if app_state != null:
+		selected_curse_id = str(app_state.save_data.get("selected_curse_id", selected_curse_id))
+		selected_upgrade_layout_id = str(app_state.save_data.get("station_layout_id", selected_upgrade_layout_id))
 	if app_state != null and not app_state.save_changed.is_connected(refresh_archive_panel):
 		app_state.save_changed.connect(refresh_archive_panel)
 	if is_inside_tree():
@@ -58,6 +121,12 @@ func setup(new_app_state, new_content_db) -> void:
 func _ready() -> void:
 	_build_ui()
 	refresh_archive_panel()
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if pre_dive_panel != null and pre_dive_panel.visible and event.is_action_pressed("ui_cancel"):
+		hide_pre_dive_panel()
+		get_viewport().set_input_as_handled()
 
 
 func _build_ui() -> void:
@@ -156,24 +225,43 @@ func _build_ui() -> void:
 	archive_panel.add_child(archive_box)
 
 	var archive_title := Label.new()
-	archive_title.text = "Archive Layout"
+	archive_title.text = "Archive Hub"
 	archive_box.add_child(archive_title)
 
+	var section_row := HBoxContainer.new()
+	section_row.add_theme_constant_override("separation", 6)
+	archive_box.add_child(section_row)
+
+	_add_section_button(section_row, "archive", "Archive")
+	_add_section_button(section_row, "progression", "Progression")
+	_add_section_button(section_row, "curses", "Curses")
+	_add_section_button(section_row, "records", "Records")
+	_add_section_button(section_row, "upgrades", "Upgrades")
+
+	var section_stack := VBoxContainer.new()
+	section_stack.add_theme_constant_override("separation", 12)
+	archive_box.add_child(section_stack)
+
+	var archive_section := VBoxContainer.new()
+	archive_section.add_theme_constant_override("separation", 8)
+	section_stack.add_child(archive_section)
+	section_panels["archive"] = archive_section
+
 	archive_label = _make_wrapped_label("", 440)
-	archive_box.add_child(archive_label)
+	archive_section.add_child(archive_label)
 
 	bonus_label = _make_wrapped_label("", 440)
-	archive_box.add_child(bonus_label)
+	archive_section.add_child(bonus_label)
 
 	var slot_title := Label.new()
 	slot_title.text = "Slots"
-	archive_box.add_child(slot_title)
+	archive_section.add_child(slot_title)
 
 	slot_grid = GridContainer.new()
 	slot_grid.columns = 3
 	slot_grid.add_theme_constant_override("h_separation", 8)
 	slot_grid.add_theme_constant_override("v_separation", 8)
-	archive_box.add_child(slot_grid)
+	archive_section.add_child(slot_grid)
 
 	for index in range(ARCHIVE_SLOT_COUNT):
 		var slot_button := Button.new()
@@ -185,18 +273,119 @@ func _build_ui() -> void:
 
 	var inventory_title := Label.new()
 	inventory_title.text = "Owned Items"
-	archive_box.add_child(inventory_title)
+	archive_section.add_child(inventory_title)
 
 	inventory_grid = GridContainer.new()
 	inventory_grid.columns = 2
 	inventory_grid.add_theme_constant_override("h_separation", 8)
 	inventory_grid.add_theme_constant_override("v_separation", 8)
-	archive_box.add_child(inventory_grid)
+	archive_section.add_child(inventory_grid)
 
 	var clear_button := Button.new()
 	clear_button.text = "Clear Selection"
 	clear_button.pressed.connect(_clear_selection)
-	archive_box.add_child(clear_button)
+	archive_section.add_child(clear_button)
+
+	var progression_section := VBoxContainer.new()
+	progression_section.visible = false
+	progression_section.add_theme_constant_override("separation", 8)
+	section_stack.add_child(progression_section)
+	section_panels["progression"] = progression_section
+
+	var progression_title := Label.new()
+	progression_title.text = "Archive Progression"
+	progression_section.add_child(progression_title)
+
+	var progression_summary := _make_wrapped_label("", 440)
+	progression_section.add_child(progression_summary)
+	progression_summary_label = progression_summary
+
+	var progression_grid_title := Label.new()
+	progression_grid_title.text = "Wing previews"
+	progression_section.add_child(progression_grid_title)
+
+	progression_grid = GridContainer.new()
+	progression_grid.columns = 2
+	progression_grid.add_theme_constant_override("h_separation", 8)
+	progression_grid.add_theme_constant_override("v_separation", 8)
+	progression_section.add_child(progression_grid)
+
+	progression_detail_label = _make_wrapped_label("", 440)
+	progression_section.add_child(progression_detail_label)
+
+	var curses_section := VBoxContainer.new()
+	curses_section.visible = false
+	curses_section.add_theme_constant_override("separation", 8)
+	section_stack.add_child(curses_section)
+	section_panels["curses"] = curses_section
+
+	var curses_title := Label.new()
+	curses_title.text = "Curse Selection"
+	curses_section.add_child(curses_title)
+
+	curses_summary_label = _make_wrapped_label("", 440)
+	curses_section.add_child(curses_summary_label)
+
+	curse_grid = GridContainer.new()
+	curse_grid.columns = 2
+	curse_grid.add_theme_constant_override("h_separation", 8)
+	curse_grid.add_theme_constant_override("v_separation", 8)
+	curses_section.add_child(curse_grid)
+
+	curse_detail_label = _make_wrapped_label("", 440)
+	curses_section.add_child(curse_detail_label)
+
+	var records_section := VBoxContainer.new()
+	records_section.visible = false
+	records_section.add_theme_constant_override("separation", 8)
+	section_stack.add_child(records_section)
+	section_panels["records"] = records_section
+
+	var records_title := Label.new()
+	records_title.text = "Run History and Records"
+	records_section.add_child(records_title)
+
+	records_summary_label = _make_wrapped_label("", 440)
+	records_section.add_child(records_summary_label)
+
+	records_grid = VBoxContainer.new()
+	records_grid.add_theme_constant_override("separation", 6)
+	records_section.add_child(records_grid)
+
+	copy_records_button = Button.new()
+	copy_records_button.text = "Copy Summary"
+	copy_records_button.pressed.connect(_on_copy_records_pressed)
+	records_section.add_child(copy_records_button)
+
+	var upgrades_section := VBoxContainer.new()
+	upgrades_section.visible = false
+	upgrades_section.add_theme_constant_override("separation", 8)
+	section_stack.add_child(upgrades_section)
+	section_panels["upgrades"] = upgrades_section
+
+	var upgrades_title := Label.new()
+	upgrades_title.text = "Upgrade Preview"
+	upgrades_section.add_child(upgrades_title)
+
+	upgrade_summary_label = _make_wrapped_label("", 440)
+	upgrades_section.add_child(upgrade_summary_label)
+
+	upgrade_grid = GridContainer.new()
+	upgrade_grid.columns = 1
+	upgrade_grid.add_theme_constant_override("h_separation", 8)
+	upgrade_grid.add_theme_constant_override("v_separation", 8)
+	upgrades_section.add_child(upgrade_grid)
+
+	upgrade_detail_label = _make_wrapped_label("", 440)
+	upgrades_section.add_child(upgrade_detail_label)
+
+	apply_upgrade_button = Button.new()
+	apply_upgrade_button.text = "Apply Previewed Upgrade"
+	apply_upgrade_button.pressed.connect(_on_apply_upgrade_pressed)
+	upgrades_section.add_child(apply_upgrade_button)
+
+	section_panels["archive"] = archive_section
+	_show_section(active_section_id)
 
 	var deck_panel := PanelContainer.new()
 	deck_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -289,6 +478,60 @@ func _build_ui() -> void:
 	detail_body.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	detail_box.add_child(detail_body)
 
+	pre_dive_panel = PanelContainer.new()
+	pre_dive_panel.visible = false
+	pre_dive_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
+	pre_dive_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(pre_dive_panel)
+
+	var pre_dive_outer := MarginContainer.new()
+	pre_dive_outer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	pre_dive_outer.add_theme_constant_override("margin_left", 140)
+	pre_dive_outer.add_theme_constant_override("margin_top", 56)
+	pre_dive_outer.add_theme_constant_override("margin_right", 140)
+	pre_dive_outer.add_theme_constant_override("margin_bottom", 56)
+	pre_dive_panel.add_child(pre_dive_outer)
+
+	var pre_dive_box := VBoxContainer.new()
+	pre_dive_box.add_theme_constant_override("separation", 10)
+	pre_dive_outer.add_child(pre_dive_box)
+
+	var pre_dive_title := Label.new()
+	pre_dive_title.text = "Prepare the Dive"
+	pre_dive_box.add_child(pre_dive_title)
+
+	pre_dive_request_label = _make_wrapped_label("", 0)
+	pre_dive_box.add_child(pre_dive_request_label)
+
+	pre_dive_bonus_label = _make_wrapped_label("", 0)
+	pre_dive_box.add_child(pre_dive_bonus_label)
+
+	pre_dive_curse_label = _make_wrapped_label("", 0)
+	pre_dive_box.add_child(pre_dive_curse_label)
+
+	pre_dive_curse_grid = GridContainer.new()
+	pre_dive_curse_grid.columns = 2
+	pre_dive_curse_grid.add_theme_constant_override("h_separation", 8)
+	pre_dive_curse_grid.add_theme_constant_override("v_separation", 8)
+	pre_dive_box.add_child(pre_dive_curse_grid)
+
+	pre_dive_detail_label = _make_wrapped_label("", 0)
+	pre_dive_box.add_child(pre_dive_detail_label)
+
+	var pre_dive_button_row := HBoxContainer.new()
+	pre_dive_button_row.add_theme_constant_override("separation", 8)
+	pre_dive_box.add_child(pre_dive_button_row)
+
+	pre_dive_confirm_button = Button.new()
+	pre_dive_confirm_button.text = "Begin Dive"
+	pre_dive_confirm_button.pressed.connect(_on_pre_dive_confirm_pressed)
+	pre_dive_button_row.add_child(pre_dive_confirm_button)
+
+	pre_dive_cancel_button = Button.new()
+	pre_dive_cancel_button.text = "Cancel"
+	pre_dive_cancel_button.pressed.connect(_on_pre_dive_cancel_pressed)
+	pre_dive_button_row.add_child(pre_dive_cancel_button)
+
 
 func _make_wrapped_label(text: String, min_width: int) -> Label:
 	var label := Label.new()
@@ -297,6 +540,55 @@ func _make_wrapped_label(text: String, min_width: int) -> Label:
 	if min_width > 0:
 		label.custom_minimum_size = Vector2(min_width, 0)
 	return label
+
+
+func _add_section_button(parent: Control, section_id: String, title: String) -> void:
+	var button := Button.new()
+	button.text = title
+	button.focus_mode = Control.FOCUS_ALL
+	button.toggle_mode = true
+	button.pressed.connect(_on_section_pressed.bind(section_id))
+	parent.add_child(button)
+	section_buttons.append(button)
+
+
+func _on_section_pressed(section_id: String) -> void:
+	_show_section(section_id)
+	refresh_archive_panel()
+
+
+func _show_section(section_id: String) -> void:
+	if section_id == "":
+		section_id = "archive"
+	if not section_panels.has(section_id):
+		section_id = "archive"
+	active_section_id = section_id
+	for key in section_panels.keys():
+		var panel: Control = section_panels[key]
+		panel.visible = str(key) == section_id
+	for index in range(section_buttons.size()):
+		var button: Button = section_buttons[index]
+		var pressed := button.text == _section_title_for_id(section_id)
+		if button.has_method("set_pressed_no_signal"):
+			button.set_pressed_no_signal(pressed)
+		else:
+			button.button_pressed = pressed
+
+
+func _section_title_for_id(section_id: String) -> String:
+	match section_id:
+		"archive":
+			return "Archive"
+		"progression":
+			return "Progression"
+		"curses":
+			return "Curses"
+		"records":
+			return "Records"
+		"upgrades":
+			return "Upgrades"
+		_:
+			return "Archive"
 
 
 func refresh_archive_panel() -> void:
@@ -335,6 +627,11 @@ func refresh_archive_panel() -> void:
 	_refresh_deck_buttons()
 	_refresh_collection_buttons()
 	_refresh_reward_panel()
+	_refresh_progression_panel()
+	_refresh_curse_panel()
+	_refresh_record_panel()
+	_refresh_upgrade_panel()
+	_refresh_pre_dive_panel()
 
 
 func set_request_text(text: String) -> void:
@@ -412,6 +709,219 @@ func _on_start_research_pressed() -> void:
 	else:
 		show_detail("Research", "No research job is ready to begin.")
 	refresh_archive_panel()
+
+
+func open_pre_dive_panel(request_id: String) -> void:
+	if app_state == null:
+		return
+	pre_dive_request_id = request_id
+	if _get_curse_name(selected_curse_id) == "none":
+		selected_curse_id = _get_default_curse_id()
+	_refresh_pre_dive_panel()
+	pre_dive_panel.visible = true
+	if pre_dive_curse_grid != null:
+		for child in pre_dive_curse_grid.get_children():
+			if child is Button:
+				child.grab_focus()
+
+
+func hide_pre_dive_panel() -> void:
+	if pre_dive_panel != null:
+		pre_dive_panel.visible = false
+	pre_dive_request_id = ""
+
+
+func get_selected_curse_id() -> String:
+	return selected_curse_id
+
+
+func _on_pre_dive_confirm_pressed() -> void:
+	if pre_dive_request_id == "":
+		return
+	pre_dive_confirmed.emit(pre_dive_request_id, selected_curse_id)
+	hide_pre_dive_panel()
+
+
+func _on_pre_dive_cancel_pressed() -> void:
+	hide_pre_dive_panel()
+
+
+func _refresh_pre_dive_panel() -> void:
+	if pre_dive_panel == null or app_state == null:
+		return
+	var request = null
+	request = app_state.get_active_request()
+	if request != null:
+		var objective_text := _shorten_text(str(request.objective_text), 110)
+		pre_dive_request_label.text = "Request: %s\n%s\nReward: %s" % [
+			str(request.name),
+			objective_text,
+			str(request.reward_text),
+		]
+	else:
+		pre_dive_request_label.text = "No active request."
+	pre_dive_bonus_label.text = app_state.get_active_archive_bonus_text()
+	pre_dive_curse_label.text = "Curse family: %s\nSelected: %s" % [
+		CURSE_FAMILY_NAME,
+		_get_curse_name(selected_curse_id) if selected_curse_id != "" else "none",
+	]
+	pre_dive_detail_label.text = _get_curse_detail_text(selected_curse_id)
+	_refresh_curse_grid(pre_dive_curse_grid, true)
+
+
+func _refresh_progression_panel() -> void:
+	if progression_summary_label == null:
+		return
+	progression_summary_label.text = _build_progression_summary_text()
+	_refresh_knowledge_wings()
+
+
+func _refresh_curse_panel() -> void:
+	if curses_summary_label == null:
+		return
+	curses_summary_label.text = "Select one curse before a dive. Only one family is available in this milestone."
+	_refresh_curse_grid(curse_grid, false)
+	curse_detail_label.text = _get_curse_detail_text(selected_curse_id)
+
+
+func _refresh_record_panel() -> void:
+	if records_summary_label == null:
+		return
+	records_summary_label.text = _build_records_summary_text()
+	for child in records_grid.get_children():
+		child.queue_free()
+	var lines := _build_record_entries_text()
+	if lines.is_empty():
+		records_grid.add_child(_make_wrapped_label("No completed request records yet.", 440))
+	else:
+		for line in lines:
+			records_grid.add_child(_make_wrapped_label(line, 440))
+
+
+func _refresh_upgrade_panel() -> void:
+	if upgrade_summary_label == null:
+		return
+	upgrade_summary_label.text = "Preview library upgrades before spending essence. Current essence: %d." % app_state.get_essence()
+	_refresh_upgrade_grid()
+	upgrade_detail_label.text = _build_upgrade_detail_text(selected_upgrade_layout_id)
+	if apply_upgrade_button != null:
+		apply_upgrade_button.disabled = selected_upgrade_layout_id == "" or selected_upgrade_layout_id == app_state.get_station_layout_id()
+
+
+func _refresh_knowledge_wings() -> void:
+	if progression_grid == null:
+		return
+	for child in progression_grid.get_children():
+		child.queue_free()
+	progression_buttons.clear()
+
+	var tag_ids: Array[String] = content_db.get_knowledge_tag_ids()
+	if tag_ids.is_empty():
+		progression_grid.add_child(_make_wrapped_label("No knowledge tags are available.", 440))
+		return
+
+	for tag_id in tag_ids:
+		var button := Button.new()
+		button.custom_minimum_size = Vector2(200, 64)
+		button.focus_mode = Control.FOCUS_ALL
+		button.toggle_mode = true
+		button.text = _build_wing_button_text(tag_id)
+		button.pressed.connect(_on_progression_wing_pressed.bind(tag_id))
+		progression_grid.add_child(button)
+		progression_buttons.append(button)
+	if selected_progression_tag_id == "" or not tag_ids.has(selected_progression_tag_id):
+		selected_progression_tag_id = tag_ids[0]
+	for index in range(progression_buttons.size()):
+		var button: Button = progression_buttons[index]
+		button.button_pressed = index < tag_ids.size() and str(tag_ids[index]) == selected_progression_tag_id
+	progression_detail_label.text = _build_wing_detail_text(selected_progression_tag_id)
+
+
+func _on_progression_wing_pressed(tag_id: String) -> void:
+	selected_progression_tag_id = tag_id
+	progression_detail_label.text = _build_wing_detail_text(tag_id)
+
+
+func _refresh_curse_grid(grid: GridContainer, pre_dive: bool) -> void:
+	if grid == null:
+		return
+	for child in grid.get_children():
+		child.queue_free()
+	if not pre_dive:
+		curse_buttons.clear()
+
+	for curse in CURSE_OPTIONS:
+		var curse_id := str(curse.get("id", ""))
+		var button := Button.new()
+		button.custom_minimum_size = Vector2(220, 64)
+		button.focus_mode = Control.FOCUS_ALL
+		button.toggle_mode = true
+		button.text = "%s\n%s" % [str(curse.get("name", curse_id)), str(curse.get("risk", ""))]
+		button.pressed.connect(_on_curse_pressed.bind(curse_id))
+		grid.add_child(button)
+		if not pre_dive:
+			curse_buttons.append(button)
+		if curse_id == selected_curse_id:
+			button.button_pressed = true
+
+
+func _on_curse_pressed(curse_id: String) -> void:
+	selected_curse_id = curse_id
+	_refresh_curse_panel()
+	_refresh_pre_dive_panel()
+
+
+func _refresh_upgrade_grid() -> void:
+	if upgrade_grid == null:
+		return
+	for child in upgrade_grid.get_children():
+		child.queue_free()
+	upgrade_buttons.clear()
+
+	var options: Array[Dictionary] = app_state.get_station_layout_options()
+	var current_layout_id := app_state.get_station_layout_id()
+	var option_ids: Array[String] = []
+	for option in options:
+		option_ids.append(str(option.get("id", "")))
+	if selected_upgrade_layout_id == "" or not option_ids.has(selected_upgrade_layout_id):
+		selected_upgrade_layout_id = current_layout_id
+	for option in options:
+		var layout_id := str(option.get("id", ""))
+		var button := Button.new()
+		button.custom_minimum_size = Vector2(260, 58)
+		button.focus_mode = Control.FOCUS_ALL
+		button.toggle_mode = true
+		button.text = "%s\nCost: 1 essence" % [str(option.get("name", layout_id))]
+		button.pressed.connect(_on_upgrade_preview_pressed.bind(layout_id))
+		upgrade_grid.add_child(button)
+		upgrade_buttons.append(button)
+		if layout_id == selected_upgrade_layout_id:
+			button.button_pressed = true
+
+
+func _on_upgrade_preview_pressed(layout_id: String) -> void:
+	selected_upgrade_layout_id = layout_id
+	upgrade_detail_label.text = _build_upgrade_detail_text(layout_id)
+	if apply_upgrade_button != null:
+		apply_upgrade_button.disabled = layout_id == app_state.get_station_layout_id()
+
+
+func _on_apply_upgrade_pressed() -> void:
+	if selected_upgrade_layout_id == "":
+		return
+	if app_state.set_station_layout(selected_upgrade_layout_id):
+		show_detail("Upgrade Applied", app_state.get_station_layout_text())
+	else:
+		show_detail("Upgrade Locked", "Spend 1 essence to switch layouts.")
+	refresh_archive_panel()
+
+
+func _on_copy_records_pressed() -> void:
+	var summary := _build_copyable_record_text()
+	if summary == "":
+		return
+	DisplayServer.clipboard_set(summary)
+	show_detail("Records Copied", "Run history copied to the clipboard.")
 
 
 func _on_arrange_stations_pressed() -> void:
@@ -739,3 +1249,176 @@ func _get_item_name(item_type: String, item_id: String) -> String:
 func _short_text_from_summary(summary: String) -> String:
 	var first_line := summary.split("\n", false, 1)[0]
 	return _shorten_text(first_line, 82)
+
+
+func _get_default_curse_id() -> String:
+	if CURSE_OPTIONS.is_empty():
+		return ""
+	return str(CURSE_OPTIONS[0].get("id", ""))
+
+
+func _get_curse_name(curse_id: String) -> String:
+	for curse in CURSE_OPTIONS:
+		if str(curse.get("id", "")) == curse_id:
+			return str(curse.get("name", curse_id))
+	return "none"
+
+
+func _get_curse_detail_text(curse_id: String) -> String:
+	if curse_id == "":
+		return "Choose a curse to preview the risk and reward text for the next dive."
+	for curse in CURSE_OPTIONS:
+		if str(curse.get("id", "")) == curse_id:
+			return "%s\nRisk: %s\nReward: %s" % [
+				str(curse.get("name", curse_id)),
+				str(curse.get("risk", "")),
+				str(curse.get("reward", "")),
+			]
+	return "Unknown curse selection."
+
+
+func _build_progression_summary_text() -> String:
+	var request_text := app_state.get_request_queue_text()
+	var lines: Array[String] = []
+	lines.append("Archive progression uses the tag wings already present in this build.")
+	lines.append("Essence: %d" % app_state.get_essence())
+	lines.append("Active request queue:")
+	lines.append(request_text)
+	lines.append("")
+	lines.append("Active archive bonuses:")
+	lines.append(app_state.get_active_archive_bonus_text())
+	return "\n".join(lines)
+
+
+func _build_wing_button_text(tag_id: String) -> String:
+	var tag := content_db.get_knowledge_tag(tag_id)
+	var tag_name := str(tag.name if tag != null else tag_id)
+	var counts := _get_wing_item_counts(tag_id)
+	return "%s\nTomes %d | Relics %d" % [tag_name, int(counts.get("tomes", 0)), int(counts.get("relics", 0))]
+
+
+func _build_wing_detail_text(tag_id: String) -> String:
+	var tag := content_db.get_knowledge_tag(tag_id)
+	if tag == null:
+		return "No wing data available."
+	var counts := _get_wing_item_counts(tag_id)
+	var research_id := _find_research_for_tag(tag_id)
+	var research_text := "No research track found."
+	if research_id != "":
+		var research := content_db.get_research_runtime_data(research_id)
+		research_text = "%s\n%s" % [str(research.get("name", research_id)), str(research.get("description", ""))]
+	return "%s\n%s\nOwned tomes: %d\nOwned relics: %d\nResearch preview:\n%s" % [
+		str(tag.name),
+		str(tag.description),
+		int(counts.get("tomes", 0)),
+		int(counts.get("relics", 0)),
+		research_text,
+	]
+
+
+func _get_wing_item_counts(tag_id: String) -> Dictionary:
+	var tome_count := 0
+	var relic_count := 0
+	for tome_id in app_state.get_archive_tomes():
+		var tome = content_db.get_tome(tome_id)
+		if tome != null and tome.knowledge_tags.has(tag_id):
+			tome_count += 1
+	for relic_id in app_state.get_archive_relics():
+		var relic = content_db.get_relic(relic_id)
+		if relic != null and relic.knowledge_tags.has(tag_id):
+			relic_count += 1
+	return {
+		"tomes": tome_count,
+		"relics": relic_count,
+	}
+
+
+func _find_research_for_tag(tag_id: String) -> String:
+	for research_id in content_db.get_research_definition_ids():
+		var research := content_db.get_research_runtime_data(research_id)
+		if research.get("knowledge_tags", []).has(tag_id):
+			return research_id
+	return ""
+
+
+func _build_records_summary_text() -> String:
+	var history: Array = []
+	if app_state != null:
+		history = app_state.save_data.get("request_history", [])
+	var completed_count := 0
+	var expired_count := 0
+	for entry in history:
+		if typeof(entry) != TYPE_DICTIONARY:
+			continue
+		var state := str(entry.get("state", ""))
+		if state == "completed":
+			completed_count += 1
+		elif state == "expired":
+			expired_count += 1
+	var curse_text := "none selected"
+	if app_state != null:
+		curse_text = _get_curse_name(str(app_state.save_data.get("selected_curse_id", "")))
+	if curse_text == "none":
+		curse_text = "none selected"
+	return "Completed records: %d\nExpired records: %d\nLast curse preview: %s\nCopyable summaries are available below." % [completed_count, expired_count, curse_text]
+
+
+func _build_record_entries_text() -> Array[String]:
+	var lines: Array[String] = []
+	var history: Array = []
+	if app_state != null:
+		history = app_state.save_data.get("request_history", [])
+	if history.is_empty():
+		return lines
+	var start_index := max(0, history.size() - 6)
+	for index in range(start_index, history.size()):
+		if typeof(history[index]) != TYPE_DICTIONARY:
+			continue
+		var entry: Dictionary = history[index]
+		var request_id := str(entry.get("request_id", ""))
+		var request = content_db.get_request(request_id)
+		var title := str(request.name if request != null else request_id)
+		var state := str(entry.get("state", ""))
+		var turn := int(entry.get("turn", 0))
+		var note := str(entry.get("note", ""))
+		lines.append("%s [%s] on turn %d%s" % [
+			title,
+			state,
+			turn,
+			(" - %s" % note) if note != "" else "",
+		])
+	return lines
+
+
+func _build_copyable_record_text() -> String:
+	var lines: Array[String] = []
+	lines.append("Arcane Archivist records")
+	lines.append("Essence: %d" % app_state.get_essence())
+	lines.append("Active request: %s" % app_state.get_active_request_name())
+	lines.append("Last curse preview: %s" % _get_curse_name(str(app_state.save_data.get("selected_curse_id", ""))))
+	for entry_text in _build_record_entries_text():
+		lines.append(entry_text)
+	return "\n".join(lines)
+
+
+func _build_upgrade_detail_text(layout_id: String) -> String:
+	if layout_id == "":
+		return "Select a layout to preview its effect."
+	var options: Array[Dictionary] = app_state.get_station_layout_options()
+	var current_id := app_state.get_station_layout_id()
+	var selected: Dictionary = {}
+	var current: Dictionary = {}
+	for option in options:
+		if str(option.get("id", "")) == layout_id:
+			selected = option
+		if str(option.get("id", "")) == current_id:
+			current = option
+	if selected.is_empty():
+		return "Unknown layout."
+	var current_name := str(current.get("name", current_id))
+	var selected_name := str(selected.get("name", layout_id))
+	return "Current: %s\nPreview: %s\n\n%s\n\nSelecting this layout will replace the current station plan." % [
+		current_name,
+		selected_name,
+		str(selected.get("description", "")),
+	]

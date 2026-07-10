@@ -24,6 +24,13 @@ var bonus_vs_enemy_kind_damage: int = 0
 var reward_relic_id: String = ""
 var reward_choice_bonus_count: int = 0
 var active_bonuses: Array[Dictionary] = []
+var selected_curse_family_id: String = ""
+var selected_curse_ids: Array[String] = []
+var active_wing_id: String = ""
+var active_meta_unlock_ids: Array[String] = []
+var faction_reputation_snapshot: Dictionary = {}
+var replay_summary: Dictionary = {}
+var run_modifiers: Array[Dictionary] = []
 
 func to_dict() -> Dictionary:
 	return {
@@ -50,6 +57,13 @@ func to_dict() -> Dictionary:
 		"reward_relic_id": reward_relic_id,
 		"reward_choice_bonus_count": reward_choice_bonus_count,
 		"active_bonuses": active_bonuses,
+		"selected_curse_family_id": selected_curse_family_id,
+		"selected_curse_ids": selected_curse_ids,
+		"active_wing_id": active_wing_id,
+		"active_meta_unlock_ids": active_meta_unlock_ids,
+		"faction_reputation_snapshot": faction_reputation_snapshot,
+		"replay_summary": replay_summary,
+		"run_modifiers": run_modifiers,
 	}
 
 func from_dict(data: Dictionary) -> void:
@@ -76,3 +90,10 @@ func from_dict(data: Dictionary) -> void:
 	reward_relic_id = str(data.get("reward_relic_id", ""))
 	reward_choice_bonus_count = int(data.get("reward_choice_bonus_count", 0))
 	active_bonuses = data.get("active_bonuses", [])
+	selected_curse_family_id = str(data.get("selected_curse_family_id", ""))
+	selected_curse_ids = data.get("selected_curse_ids", [])
+	active_wing_id = str(data.get("active_wing_id", ""))
+	active_meta_unlock_ids = data.get("active_meta_unlock_ids", [])
+	faction_reputation_snapshot = data.get("faction_reputation_snapshot", {})
+	replay_summary = data.get("replay_summary", {})
+	run_modifiers = data.get("run_modifiers", [])

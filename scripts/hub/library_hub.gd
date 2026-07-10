@@ -83,6 +83,8 @@ func _build_hud() -> void:
 	hud = preload("res://scenes/ui/HubHud.tscn").instantiate()
 	add_child(hud)
 	hud.setup(app_state, content_db)
+	if not hud.pre_dive_confirmed.is_connected(_on_pre_dive_confirmed):
+		hud.pre_dive_confirmed.connect(_on_pre_dive_confirmed)
 
 func _process(_delta: float) -> void:
 	if player == null or hud == null:
@@ -93,6 +95,9 @@ func _process(_delta: float) -> void:
 		hud.set_prompt_text("Move near the board, desk, shelf, or entrance. Press Interact to inspect or begin.")
 	else:
 		hud.set_prompt_text("Interact with %s." % focused.display_name)
+	if hud.pre_dive_panel != null and hud.pre_dive_panel.visible:
+		hud.set_prompt_text("Choose a curse preview, then confirm the dive.")
+		return
 
 	if Input.is_action_just_pressed("interact") and focused != null:
 		_handle_interaction(focused)
@@ -129,11 +134,14 @@ func _handle_interaction(focused) -> void:
 		if not app_state.is_active_deck_valid():
 			hud.show_detail("Deck Invalid", "Repair the active deck before diving again.")
 			return
+		if app_state.get_active_request_id() == "":
+			hud.show_detail("No Request", "There is no active patron request to dive for.")
+			return
+		var dive_text := "A short descent will search for the requested tome.\n\n%s" % app_state.get_active_deck_brief_text()
 		if app_state.has_pending_research_job():
-			hud.show_detail("Begin Dive", "A research job is waiting, but the active request can still be dived.\n\n%s" % app_state.get_active_deck_brief_text())
-		else:
-			hud.show_detail("Begin Dive", "A short descent will search for the requested tome.\n\n%s" % app_state.get_active_deck_brief_text())
-		start_dive_requested.emit(app_state.get_active_request_id())
+			dive_text = "A research job is waiting, but the active request can still be dived.\n\n%s" % app_state.get_active_deck_brief_text()
+		hud.show_detail("Begin Dive", dive_text + "\n\nSelect a curse preview before confirming the dive.")
+		hud.open_pre_dive_panel(app_state.get_active_request_id())
 
 func _get_focused_interactable():
 	if player == null:
@@ -168,6 +176,15 @@ func _refresh_ui() -> void:
 	hud.set_archive_text(_build_archive_text())
 	hud.set_bonus_text(app_state.get_active_archive_bonus_text())
 	hud.set_deck_text(app_state.get_active_deck_brief_text())
+
+func _on_pre_dive_confirmed(request_id: String, curse_id: String) -> void:
+	if app_state != null:
+		app_state.save_data["selected_curse_id"] = curse_id
+		if app_state.has_method("_save"):
+			app_state._save()
+	if hud != null:
+		hud.hide_pre_dive_panel()
+	start_dive_requested.emit(request_id)
 
 func _build_archive_text() -> String:
 	var tomes: Array = app_state.get_archive_tomes()

@@ -52,7 +52,7 @@ func _build_scene() -> void:
 	add_child(hud)
 	hud.setup(player)
 	hud.card_selected.connect(_on_card_selected)
-	hud.set_active_bonuses_text(app_state.get_active_archive_bonus_text())
+	hud.set_active_bonuses_text(app_state.get_active_run_bonus_text())
 	hud.set_deck_text(app_state.get_active_deck_brief_text())
 
 	_sync_player_to_room(0)
@@ -91,7 +91,7 @@ func _process(_delta: float) -> void:
 		hud.set_room_title(room.room_title)
 		hud.set_stats_text(room.get_stats_text())
 		hud.set_prompt_text(room.get_prompt_text())
-		hud.set_active_bonuses_text(app_state.get_active_archive_bonus_text())
+		hud.set_active_bonuses_text(app_state.get_active_run_bonus_text())
 
 func _unhandled_input(event: InputEvent) -> void:
 	if player == null or run_state == null:
@@ -165,7 +165,7 @@ func _on_card_selected(index: int) -> void:
 		_refresh_hud("%s is not ready." % card.name)
 		return
 
-	var runtime := ContentDB.get_card_runtime_data(card.id, app_state.get_active_archive_bonuses())
+	var runtime: Dictionary = ContentDB.get_card_runtime_data(card.id, app_state.get_active_run_bonuses())
 	var cost := int(runtime.get("cost", card.cost))
 	if card.kind == "dash":
 		player.do_dash(_movement_direction(), float(runtime.get("move_bonus", card.move_bonus)))
@@ -231,7 +231,7 @@ func _refresh_hud(message: String) -> void:
 		hud.set_stats_text("")
 		hud.set_prompt_text("")
 	hud.set_message(message)
-	hud.set_active_bonuses_text(app_state.get_active_archive_bonus_text())
+	hud.set_active_bonuses_text(app_state.get_active_run_bonus_text())
 	hud.set_deck_text(app_state.get_active_deck_brief_text())
 
 func _finish_run(success: bool, tome_id: String) -> void:

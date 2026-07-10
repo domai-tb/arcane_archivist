@@ -4,6 +4,7 @@ signal save_changed
 signal run_started
 signal run_finished(success: bool, tome_id: String)
 signal archive_changed
+signal progression_changed
 
 var save_data: Dictionary = {}
 var current_run = null
@@ -37,6 +38,239 @@ const STATION_LAYOUTS := {
 	},
 }
 
+const WING_DEFINITIONS := {
+	"astral_wing": {
+		"name": "Astral Wing",
+		"description": "Build around foresight, bonus card choices, and lighter cooldown pressure.",
+		"knowledge_tags": ["astral_theory"],
+		"unlocked_by_default": true,
+		"upgrades": [
+			{
+				"id": "astral_wing_observation",
+				"name": "Observation Gallery",
+				"description": "Adds one extra pre-dive card preview and a little more reward choice flexibility.",
+				"essence_cost": 2,
+				"modifiers": {"reward_choice_bonus_count": 1},
+			},
+			{
+				"id": "astral_wing_star_map",
+				"name": "Star Map Vault",
+				"description": "Improves cooldown recovery for study-heavy dive plans.",
+				"essence_cost": 4,
+				"modifiers": {"cooldown_reduction_bonus": 0.25, "reward_heal_bonus": 1},
+			},
+			{
+				"id": "astral_wing_lens_lane",
+				"name": "Lens Lane",
+				"description": "Rewards careful card ordering with a small damage and insight bump.",
+				"essence_cost": 6,
+				"modifiers": {"card_damage_bonus": 1, "reward_heal_bonus": 1},
+			},
+		],
+	},
+	"beast_wing": {
+		"name": "Beast Wing",
+		"description": "Build around survival, pressure relief, and stronger close-range dives.",
+		"knowledge_tags": ["beast_lore"],
+		"unlocked_by_default": false,
+		"upgrades": [
+			{
+				"id": "beast_wing_trail",
+				"name": "Trail Chamber",
+				"description": "Start dives with extra shield and better recovery from risky rooms.",
+				"essence_cost": 2,
+				"modifiers": {"starting_shield": 1, "reward_heal_bonus": 1},
+			},
+			{
+				"id": "beast_wing_trap",
+				"name": "Trap Gallery",
+				"description": "Improves room-clearing power against durable threats.",
+				"essence_cost": 4,
+				"modifiers": {"card_damage_bonus": 1, "bonus_vs_enemy_kind": "melee", "bonus_vs_enemy_kind_damage": 1},
+			},
+			{
+				"id": "beast_wing_hunt",
+				"name": "Hunt Wing",
+				"description": "Makes hard dives more forgiving and unlocks a wider reward spread.",
+				"essence_cost": 6,
+				"modifiers": {"starting_shield": 1, "reward_choice_bonus_count": 1},
+			},
+		],
+	},
+	"ward_wing": {
+		"name": "Ward Wing",
+		"description": "Build around protection, control, and steadier library planning.",
+		"knowledge_tags": ["wardcraft", "forbidden_history"],
+		"unlocked_by_default": false,
+		"upgrades": [
+			{
+				"id": "ward_wing_seal",
+				"name": "Seal Bay",
+				"description": "Stations settle better and the run starts with more protection.",
+				"essence_cost": 2,
+				"modifiers": {"starting_shield": 2},
+			},
+			{
+				"id": "ward_wing_lattice",
+				"name": "Lattice Alcove",
+				"description": "Lower cooldown pressure and sharpen defensive cards.",
+				"essence_cost": 4,
+				"modifiers": {"cooldown_reduction_bonus": 0.25, "card_damage_bonus": 1},
+			},
+			{
+				"id": "ward_wing_archive",
+				"name": "Archive Lock",
+				"description": "Increases reward reliability and library resilience.",
+				"essence_cost": 6,
+				"modifiers": {"reward_choice_bonus_count": 1, "reward_heal_bonus": 1},
+			},
+		],
+	},
+}
+
+const FACTION_DEFINITIONS := {
+	"scholars": {
+		"name": "Scholars of the Quiet Stack",
+		"description": "Respond to forbidden history, complex records, and archival recovery.",
+		"tracked_tags": ["forbidden_history"],
+		"reputation_thresholds": [3, 6, 10],
+		"tier_modifiers": [
+			{"reward_choice_bonus_count": 1},
+			{"cooldown_reduction_bonus": 0.25},
+			{"card_damage_bonus": 1},
+		],
+	},
+	"wardens": {
+		"name": "Wardens of the Measuring Seal",
+		"description": "Respond to wardcraft, containment, and library defense work.",
+		"tracked_tags": ["wardcraft"],
+		"reputation_thresholds": [3, 6, 10],
+		"tier_modifiers": [
+			{"starting_shield": 1},
+			{"reward_heal_bonus": 1},
+			{"bonus_vs_enemy_kind": "melee", "bonus_vs_enemy_kind_damage": 1},
+		],
+	},
+	"fieldwardens": {
+		"name": "Fieldwardens of the Living Shelf",
+		"description": "Respond to beast lore, salvage, and resilient recovery.",
+		"tracked_tags": ["beast_lore", "astral_theory"],
+		"reputation_thresholds": [3, 6, 10],
+		"tier_modifiers": [
+			{"reward_heal_bonus": 1},
+			{"starting_shield": 1},
+			{"reward_choice_bonus_count": 1},
+		],
+	},
+}
+
+const CURSE_DEFINITIONS := {
+	"glass_family": {
+		"name": "Glass Family",
+		"description": "Sharper rewards, brittle margins.",
+		"unlocked_by_default": true,
+		"curses": [
+			{
+				"id": "glass_shards",
+				"name": "Glass Shards",
+				"description": "Enemies hit harder, but dive rewards improve.",
+				"run_modifiers": {"card_damage_bonus": 1},
+				"reward_modifiers": {"reward_choice_bonus_count": 1},
+				"clear_rewards": {"essence": 1},
+			},
+			{
+				"id": "glass_reflection",
+				"name": "Reflection Loss",
+				"description": "Cooldowns recover slower, but the archive learns faster.",
+				"run_modifiers": {"cooldown_reduction_bonus": -0.25},
+				"reward_modifiers": {"reward_heal_bonus": 1},
+				"clear_rewards": {"reputation": {"scholars": 1}},
+			},
+		],
+	},
+	"ink_family": {
+		"name": "Ink Family",
+		"description": "Archive pressure and black-archive bargains.",
+		"unlocked_by_default": false,
+		"curses": [
+			{
+				"id": "ink_tide",
+				"name": "Ink Tide",
+				"description": "The dive starts with less certainty and a wider reward spread.",
+				"run_modifiers": {"starting_shield": -1},
+				"reward_modifiers": {"reward_choice_bonus_count": 1},
+				"clear_rewards": {"essence": 2},
+			},
+			{
+				"id": "ink_echo",
+				"name": "Ink Echo",
+				"description": "Card recovery is noisier, but rare relics surface more often.",
+				"run_modifiers": {"reward_heal_bonus": -1},
+				"reward_modifiers": {"card_damage_bonus": 1},
+				"clear_rewards": {"relic_bias": 1},
+			},
+		],
+	},
+	"bone_family": {
+		"name": "Bone Family",
+		"description": "Pressure through attrition and sacrifice.",
+		"unlocked_by_default": false,
+		"curses": [
+			{
+				"id": "bone_drain",
+				"name": "Bone Drain",
+				"description": "The run opens with less shield, but the archive records the win.",
+				"run_modifiers": {"starting_shield": -1},
+				"reward_modifiers": {"reward_choice_bonus_count": 1},
+				"clear_rewards": {"record": "curse_clear"},
+			},
+			{
+				"id": "bone_patience",
+				"name": "Bone Patience",
+				"description": "Longer cooldowns, steadier essence.",
+				"run_modifiers": {"cooldown_reduction_bonus": -0.25},
+				"reward_modifiers": {"reward_heal_bonus": 1},
+				"clear_rewards": {"essence": 2},
+			},
+		],
+	},
+}
+
+const META_UPGRADE_DEFINITIONS := {
+	"unlock_second_wing": {
+		"name": "Open the Second Wing",
+		"description": "Unlock one additional archive wing specialization path.",
+		"essence_cost": 3,
+		"unlock_wing_ids": ["beast_wing"],
+	},
+	"unlock_third_wing": {
+		"name": "Open the Third Wing",
+		"description": "Unlock the final wing specialization path for this version.",
+		"essence_cost": 5,
+		"unlock_wing_ids": ["ward_wing"],
+	},
+	"unlock_ink_family": {
+		"name": "Ink Oath",
+		"description": "Unlock the ink curse family for before-dive selection.",
+		"essence_cost": 4,
+		"unlock_curse_families": ["ink_family"],
+	},
+	"unlock_bone_family": {
+		"name": "Bone Oath",
+		"description": "Unlock the bone curse family for before-dive selection.",
+		"essence_cost": 4,
+		"unlock_curse_families": ["bone_family"],
+	},
+	"archive_record_archive": {
+		"name": "Archive Ledger",
+		"description": "Unlock additional replay record capacity and text summaries.",
+		"essence_cost": 2,
+		"record_capacity_bonus": 12,
+	},
+}
+
+const REPLAY_RECORD_LIMIT := 48
+
 func _ready() -> void:
 	ensure_input_actions()
 	save_manager = get_node_or_null("/root/SaveManager")
@@ -62,6 +296,7 @@ func initialize() -> void:
 	_normalize_research_job_state()
 	_normalize_archive_state()
 	_normalize_card_state()
+	_normalize_progression_state()
 	_save()
 
 func ensure_input_actions() -> void:
@@ -143,6 +378,670 @@ func spend_essence(amount: int) -> bool:
 	save_changed.emit()
 	_save()
 	return true
+
+func get_progression_screen_data() -> Dictionary:
+	return {
+		"wings": get_wing_progression_entries(),
+		"factions": get_faction_progression_entries(),
+		"curses": get_curse_selection_data(),
+		"meta": get_meta_progression_data(),
+		"records": get_replay_records(),
+	}
+
+func get_wing_definition_ids() -> Array[String]:
+	var ids: Array[String] = []
+	for wing_id in WING_DEFINITIONS.keys():
+		ids.append(str(wing_id))
+	if content_db != null and content_db.has_method("get_wing_definition_ids"):
+		var content_ids: Array = content_db.get_wing_definition_ids()
+		if typeof(content_ids) == TYPE_ARRAY and not content_ids.is_empty():
+			return _copy_string_array(content_ids)
+	return ids
+
+func get_wing_definition(wing_id: String) -> Dictionary:
+	if content_db != null and content_db.has_method("get_wing_runtime_data"):
+		var runtime: Dictionary = content_db.get_wing_runtime_data(wing_id)
+		if typeof(runtime) == TYPE_DICTIONARY and not runtime.is_empty():
+			return runtime
+	var wing: Dictionary = WING_DEFINITIONS.get(wing_id, {})
+	if wing.is_empty():
+		return {}
+	return wing.duplicate(true)
+
+func get_wing_progression_state(wing_id: String) -> Dictionary:
+	var wings: Dictionary = save_data.get("wing_progression", {})
+	var wing_state: Dictionary = wings.get(wing_id, {})
+	if wing_state.is_empty():
+		var wing_def: Dictionary = get_wing_definition(wing_id)
+		if wing_def.is_empty():
+			return {}
+		wing_state = {
+			"wing_id": wing_id,
+			"unlocked": bool(wing_def.get("unlocked_by_default", false)),
+			"tier": 0,
+			"purchased_upgrade_ids": [],
+		}
+	return {
+		"wing_id": wing_id,
+		"unlocked": bool(wing_state.get("unlocked", false)),
+		"tier": max(0, int(wing_state.get("tier", 0))),
+		"purchased_upgrade_ids": _copy_string_array(wing_state.get("purchased_upgrade_ids", [])),
+	}
+
+func get_wing_progression_entries() -> Array[Dictionary]:
+	var entries: Array[Dictionary] = []
+	for wing_id in get_wing_definition_ids():
+		var wing_def: Dictionary = get_wing_definition(wing_id)
+		if wing_def.is_empty():
+			continue
+		var wing_state := get_wing_progression_state(wing_id)
+		if wing_state.is_empty():
+			continue
+		entries.append({
+			"wing_id": wing_id,
+			"name": str(wing_def.get("name", wing_id)),
+			"description": str(wing_def.get("description", "")),
+			"unlocked": bool(wing_state.get("unlocked", false)),
+			"tier": int(wing_state.get("tier", 0)),
+			"max_tier": int(wing_def.get("upgrades", []).size()),
+			"is_active": get_active_wing_id() == wing_id,
+			"upgrades": get_wing_upgrade_entries(wing_id),
+			"modifiers": get_wing_modifiers(wing_id),
+		})
+	return entries
+
+func get_wing_upgrade_entries(wing_id: String) -> Array[Dictionary]:
+	var wing_def: Dictionary = get_wing_definition(wing_id)
+	if wing_def.is_empty():
+		return []
+	var wing_state := get_wing_progression_state(wing_id)
+	var purchased_ids: Array[String] = _copy_string_array(wing_state.get("purchased_upgrade_ids", []))
+	var entries: Array[Dictionary] = []
+	for upgrade in wing_def.get("upgrades", []):
+		if typeof(upgrade) != TYPE_DICTIONARY:
+			continue
+		var upgrade_id := str(upgrade.get("id", ""))
+		if upgrade_id == "":
+			continue
+		entries.append({
+			"id": upgrade_id,
+			"name": str(upgrade.get("name", upgrade_id)),
+			"description": str(upgrade.get("description", "")),
+			"essence_cost": int(upgrade.get("essence_cost", 0)),
+			"purchased": purchased_ids.has(upgrade_id),
+			"modifiers": upgrade.get("modifiers", {}).duplicate(true),
+		})
+	return entries
+
+func get_wing_modifiers(wing_id: String) -> Array[Dictionary]:
+	var wing_def: Dictionary = get_wing_definition(wing_id)
+	if wing_def.is_empty():
+		return []
+	var state := get_wing_progression_state(wing_id)
+	var modifiers: Array[Dictionary] = []
+	for upgrade in wing_def.get("upgrades", []):
+		if typeof(upgrade) != TYPE_DICTIONARY:
+			continue
+		var upgrade_id := str(upgrade.get("id", ""))
+		if upgrade_id == "":
+			continue
+		if not _copy_string_array(state.get("purchased_upgrade_ids", [])).has(upgrade_id):
+			continue
+		var modifier: Dictionary = {
+			"id": upgrade_id,
+			"name": str(upgrade.get("name", upgrade_id)),
+			"description": str(upgrade.get("description", "")),
+			"source_type": "wing",
+			"source_id": wing_id,
+			"modifiers": upgrade.get("modifiers", {}).duplicate(true),
+		}
+		modifiers.append(modifier)
+	return modifiers
+
+func get_active_wing_id() -> String:
+	var wing_id := str(save_data.get("active_wing_id", ""))
+	if wing_id != "" and is_wing_unlocked(wing_id):
+		return wing_id
+	for candidate_id in get_wing_definition_ids():
+		if is_wing_unlocked(candidate_id):
+			return candidate_id
+	return ""
+
+func is_wing_unlocked(wing_id: String) -> bool:
+	var wing_state := get_wing_progression_state(wing_id)
+	if wing_state.is_empty():
+		return false
+	return bool(wing_state.get("unlocked", false))
+
+func unlock_wing(wing_id: String, emit_changes: bool = true) -> bool:
+	var wing_def := get_wing_definition(wing_id)
+	if wing_def.is_empty():
+		return false
+	var wings: Dictionary = save_data.get("wing_progression", {})
+	var wing_state := get_wing_progression_state(wing_id)
+	if wing_state.is_empty():
+		wing_state = {
+			"wing_id": wing_id,
+			"unlocked": true,
+			"tier": 0,
+			"purchased_upgrade_ids": [],
+		}
+	else:
+		wing_state["unlocked"] = true
+	wings[wing_id] = wing_state
+	save_data["wing_progression"] = wings
+	if save_data.get("active_wing_id", "") == "":
+		save_data["active_wing_id"] = wing_id
+	if emit_changes:
+		progression_changed.emit()
+		save_changed.emit()
+		_save()
+	return true
+
+func set_active_wing(wing_id: String) -> bool:
+	if wing_id == "":
+		return false
+	if not is_wing_unlocked(wing_id):
+		return false
+	if get_active_wing_id() == wing_id:
+		return true
+	save_data["active_wing_id"] = wing_id
+	progression_changed.emit()
+	save_changed.emit()
+	_save()
+	return true
+
+func can_upgrade_wing(wing_id: String) -> bool:
+	var wing_def := get_wing_definition(wing_id)
+	var wing_state := get_wing_progression_state(wing_id)
+	if wing_def.is_empty() or wing_state.is_empty() or not bool(wing_state.get("unlocked", false)):
+		return false
+	var tier := int(wing_state.get("tier", 0))
+	return tier < int(wing_def.get("upgrades", []).size())
+
+func purchase_wing_upgrade(wing_id: String) -> bool:
+	if not can_upgrade_wing(wing_id):
+		return false
+	var wing_def := get_wing_definition(wing_id)
+	var wing_state := get_wing_progression_state(wing_id)
+	var tier := int(wing_state.get("tier", 0))
+	var upgrades: Array = wing_def.get("upgrades", [])
+	if tier < 0 or tier >= upgrades.size():
+		return false
+	var upgrade: Dictionary = upgrades[tier]
+	var cost: int = max(0, int(upgrade.get("essence_cost", 0)))
+	if not spend_essence(cost):
+		return false
+	var purchased_ids: Array[String] = _copy_string_array(wing_state.get("purchased_upgrade_ids", []))
+	var upgrade_id := str(upgrade.get("id", ""))
+	if upgrade_id != "" and not purchased_ids.has(upgrade_id):
+		purchased_ids.append(upgrade_id)
+	wing_state["tier"] = tier + 1
+	wing_state["purchased_upgrade_ids"] = purchased_ids
+	var wings: Dictionary = save_data.get("wing_progression", {})
+	wings[wing_id] = wing_state
+	save_data["wing_progression"] = wings
+	record_replay_entry("wing_upgrade", str(wing_def.get("name", wing_id)), str(upgrade.get("description", "")), {
+		"wing_id": wing_id,
+		"upgrade_id": upgrade_id,
+		"tier": tier + 1,
+	}, "")
+	progression_changed.emit()
+	save_changed.emit()
+	_save()
+	return true
+
+func get_faction_definition_ids() -> Array[String]:
+	var ids: Array[String] = []
+	for faction_id in FACTION_DEFINITIONS.keys():
+		ids.append(str(faction_id))
+	return ids
+
+func get_faction_definition(faction_id: String) -> Dictionary:
+	var faction: Dictionary = FACTION_DEFINITIONS.get(faction_id, {})
+	if faction.is_empty():
+		return {}
+	return faction.duplicate(true)
+
+func get_faction_reputation(faction_id: String) -> int:
+	var reputation: Dictionary = save_data.get("faction_reputation", {})
+	return max(0, int(reputation.get(faction_id, 0)))
+
+func get_faction_tier(faction_id: String) -> int:
+	var faction := get_faction_definition(faction_id)
+	if faction.is_empty():
+		return 0
+	var thresholds: Array = faction.get("reputation_thresholds", [])
+	var rep := get_faction_reputation(faction_id)
+	var tier := 0
+	for threshold in thresholds:
+		if rep >= int(threshold):
+			tier += 1
+	return tier
+
+func get_faction_modifiers(faction_id: String) -> Array[Dictionary]:
+	var faction := get_faction_definition(faction_id)
+	if faction.is_empty():
+		return []
+	var tier := get_faction_tier(faction_id)
+	var modifiers: Array[Dictionary] = []
+	for index in range(min(tier, faction.get("tier_modifiers", []).size())):
+		var modifier: Dictionary = {
+			"id": "%s_tier_%d" % [faction_id, index + 1],
+			"name": str(faction.get("name", faction_id)),
+			"description": "Faction tier %d" % [index + 1],
+			"source_type": "faction",
+			"source_id": faction_id,
+			"modifiers": faction.get("tier_modifiers", [])[index].duplicate(true),
+		}
+		modifiers.append(modifier)
+	return modifiers
+
+func get_faction_progression_entries() -> Array[Dictionary]:
+	var entries: Array[Dictionary] = []
+	for faction_id in get_faction_definition_ids():
+		var faction := get_faction_definition(faction_id)
+		if faction.is_empty():
+			continue
+		entries.append({
+			"id": faction_id,
+			"name": str(faction.get("name", faction_id)),
+			"description": str(faction.get("description", "")),
+			"reputation": get_faction_reputation(faction_id),
+			"tier": get_faction_tier(faction_id),
+			"tracked_tags": _copy_string_array(faction.get("tracked_tags", [])),
+			"modifiers": get_faction_modifiers(faction_id),
+		})
+	return entries
+
+func add_faction_reputation(faction_id: String, amount: int, source: String = "") -> void:
+	if faction_id == "" or amount == 0 or get_faction_definition(faction_id).is_empty():
+		return
+	var reputation: Dictionary = save_data.get("faction_reputation", {})
+	var previous_rep: int = max(0, int(reputation.get(faction_id, 0)))
+	var new_rep: int = max(0, previous_rep + amount)
+	reputation[faction_id] = new_rep
+	save_data["faction_reputation"] = reputation
+	var previous_tier := get_faction_tier_from_value(faction_id, previous_rep)
+	var new_tier := get_faction_tier(faction_id)
+	if new_tier > previous_tier:
+		record_replay_entry("faction_milestone", str(get_faction_definition(faction_id).get("name", faction_id)), "Reached reputation tier %d." % new_tier, {
+			"faction_id": faction_id,
+			"reputation": new_rep,
+			"source": source,
+		})
+	progression_changed.emit()
+	save_changed.emit()
+	_save()
+
+func get_faction_tier_from_value(faction_id: String, reputation_value: int) -> int:
+	var faction := get_faction_definition(faction_id)
+	if faction.is_empty():
+		return 0
+	var thresholds: Array = faction.get("reputation_thresholds", [])
+	var tier := 0
+	for threshold in thresholds:
+		if reputation_value >= int(threshold):
+			tier += 1
+	return tier
+
+func get_curse_family_ids() -> Array[String]:
+	var ids: Array[String] = []
+	for family_id in CURSE_DEFINITIONS.keys():
+		ids.append(str(family_id))
+	return ids
+
+func get_curse_family_definition(family_id: String) -> Dictionary:
+	var family: Dictionary = CURSE_DEFINITIONS.get(family_id, {})
+	if family.is_empty():
+		return {}
+	return family.duplicate(true)
+
+func is_curse_family_unlocked(family_id: String) -> bool:
+	var family := get_curse_family_definition(family_id)
+	if family.is_empty():
+		return false
+	if bool(family.get("unlocked_by_default", false)):
+		return true
+	return _copy_string_array(save_data.get("meta_unlock_ids", [])).has("unlock_%s" % family_id)
+
+func get_available_curse_family_ids() -> Array[String]:
+	var ids: Array[String] = []
+	for family_id in get_curse_family_ids():
+		if is_curse_family_unlocked(family_id):
+			ids.append(family_id)
+	return ids
+
+func get_curse_definition_ids() -> Array[String]:
+	var ids: Array[String] = []
+	for family_id in get_curse_family_ids():
+		var family := get_curse_family_definition(family_id)
+		for curse in family.get("curses", []):
+			if typeof(curse) != TYPE_DICTIONARY:
+				continue
+			var curse_id := str(curse.get("id", ""))
+			if curse_id != "":
+				ids.append(curse_id)
+	return ids
+
+func get_curse_definition(curse_id: String) -> Dictionary:
+	for family_id in get_curse_family_ids():
+		var family := get_curse_family_definition(family_id)
+		for curse in family.get("curses", []):
+			if typeof(curse) != TYPE_DICTIONARY:
+				continue
+			if str(curse.get("id", "")) == curse_id:
+				return curse.duplicate(true)
+	return {}
+
+func get_curse_family_for_curse(curse_id: String) -> String:
+	for family_id in get_curse_family_ids():
+		var family := get_curse_family_definition(family_id)
+		for curse in family.get("curses", []):
+			if typeof(curse) != TYPE_DICTIONARY:
+				continue
+			if str(curse.get("id", "")) == curse_id:
+				return family_id
+	return ""
+
+func get_available_curse_options() -> Array[Dictionary]:
+	var options: Array[Dictionary] = []
+	for family_id in get_available_curse_family_ids():
+		var family := get_curse_family_definition(family_id)
+		for curse in family.get("curses", []):
+			if typeof(curse) != TYPE_DICTIONARY:
+				continue
+			var curse_id := str(curse.get("id", ""))
+			if curse_id == "":
+				continue
+			if not _copy_string_array(save_data.get("unlocked_curse_ids", [])).has(curse_id) and not bool(curse.get("unlocked_by_default", false)):
+				continue
+			options.append({
+				"id": curse_id,
+				"family_id": family_id,
+				"name": str(curse.get("name", curse_id)),
+				"description": str(curse.get("description", "")),
+				"run_modifiers": curse.get("run_modifiers", {}).duplicate(true),
+				"reward_modifiers": curse.get("reward_modifiers", {}).duplicate(true),
+				"clear_rewards": curse.get("clear_rewards", {}).duplicate(true),
+			})
+	return options
+
+func get_selected_curse_family_id() -> String:
+	var family_id := str(save_data.get("selected_curse_family_id", ""))
+	if family_id != "" and is_curse_family_unlocked(family_id):
+		return family_id
+	return ""
+
+func get_selected_curse_ids() -> Array[String]:
+	var selected: Array[String] = []
+	var family_id := get_selected_curse_family_id()
+	if family_id == "":
+		return selected
+	var stored_ids := _copy_string_array(save_data.get("selected_curse_ids", []))
+	var single_id := str(save_data.get("selected_curse_id", ""))
+	if single_id != "" and not stored_ids.has(single_id):
+		stored_ids.append(single_id)
+	for curse_id in stored_ids:
+		if get_curse_family_for_curse(curse_id) == family_id:
+			selected.append(curse_id)
+	return selected
+
+func get_curse_selection_data() -> Dictionary:
+	var family_id := get_selected_curse_family_id()
+	var family_name := ""
+	if family_id != "":
+		family_name = str(get_curse_family_definition(family_id).get("name", family_id))
+	return {
+		"selected_family_id": family_id,
+		"selected_family_name": family_name,
+		"selected_curse_ids": get_selected_curse_ids(),
+		"available_families": get_available_curse_family_ids(),
+		"available_curses": get_available_curse_options(),
+	}
+
+func set_selected_curse_family(family_id: String) -> bool:
+	if family_id != "" and not is_curse_family_unlocked(family_id):
+		return false
+	save_data["selected_curse_family_id"] = family_id
+	if family_id == "":
+		save_data["selected_curse_ids"] = []
+		save_data["selected_curse_id"] = ""
+	else:
+		save_data["selected_curse_ids"] = _filter_curses_for_family(_copy_string_array(save_data.get("selected_curse_ids", [])), family_id)
+		save_data["selected_curse_id"] = save_data["selected_curse_ids"].front() if not save_data["selected_curse_ids"].is_empty() else ""
+	progression_changed.emit()
+	save_changed.emit()
+	_save()
+	return true
+
+func set_selected_curse_ids(curse_ids: Array) -> bool:
+	var family_id := get_selected_curse_family_id()
+	if family_id == "":
+		if curse_ids.is_empty():
+			save_data["selected_curse_ids"] = []
+			save_data["selected_curse_id"] = ""
+			progression_changed.emit()
+			save_changed.emit()
+			_save()
+			return true
+		family_id = get_curse_family_for_curse(str(curse_ids[0]))
+		if family_id == "" or not is_curse_family_unlocked(family_id):
+			return false
+		save_data["selected_curse_family_id"] = family_id
+	var selected: Array[String] = []
+	for curse_id in curse_ids:
+		var curse_text := str(curse_id)
+		if curse_text == "":
+			continue
+		if get_curse_family_for_curse(curse_text) != family_id:
+			return false
+		if not selected.has(curse_text):
+			selected.append(curse_text)
+	save_data["selected_curse_ids"] = selected
+	save_data["selected_curse_id"] = selected.front() if not selected.is_empty() else ""
+	progression_changed.emit()
+	save_changed.emit()
+	_save()
+	return true
+
+func clear_selected_curse_selection() -> void:
+	save_data["selected_curse_family_id"] = ""
+	save_data["selected_curse_ids"] = []
+	save_data["selected_curse_id"] = ""
+	progression_changed.emit()
+	save_changed.emit()
+	_save()
+
+func get_selected_curse_modifiers() -> Array[Dictionary]:
+	var modifiers: Array[Dictionary] = []
+	for curse_id in get_selected_curse_ids():
+		var curse: Dictionary = get_curse_definition(curse_id)
+		if curse.is_empty():
+			continue
+		modifiers.append({
+			"id": curse_id,
+			"name": str(curse.get("name", curse_id)),
+			"description": str(curse.get("description", "")),
+			"source_type": "curse",
+			"source_id": get_curse_family_for_curse(curse_id),
+			"modifiers": curse.get("run_modifiers", {}).duplicate(true),
+			"reward_modifiers": curse.get("reward_modifiers", {}).duplicate(true),
+			"clear_rewards": curse.get("clear_rewards", {}).duplicate(true),
+		})
+	return modifiers
+
+func get_selected_curse_summary_text() -> String:
+	var data := get_curse_selection_data()
+	if data.get("selected_family_id", "") == "":
+		return "No curse family selected."
+	var lines: Array[String] = []
+	lines.append("Curse family: %s" % str(data.get("selected_family_name", data.get("selected_family_id", ""))))
+	if data.get("selected_curse_ids", []).is_empty():
+		lines.append("No curses selected.")
+	else:
+		for curse_id in data.get("selected_curse_ids", []):
+			var curse: Dictionary = get_curse_definition(str(curse_id))
+			lines.append("- %s: %s" % [str(curse.get("name", curse_id)), str(curse.get("description", ""))])
+	return "\n".join(lines)
+
+func get_meta_upgrade_ids() -> Array[String]:
+	var ids: Array[String] = []
+	for upgrade_id in META_UPGRADE_DEFINITIONS.keys():
+		ids.append(str(upgrade_id))
+	return ids
+
+func get_meta_upgrade_definition(upgrade_id: String) -> Dictionary:
+	var upgrade: Dictionary = META_UPGRADE_DEFINITIONS.get(upgrade_id, {})
+	if upgrade.is_empty():
+		return {}
+	return upgrade.duplicate(true)
+
+func get_meta_upgrade_entries() -> Array[Dictionary]:
+	var purchased: Array[String] = _copy_string_array(save_data.get("meta_unlock_ids", []))
+	var entries: Array[Dictionary] = []
+	for upgrade_id in get_meta_upgrade_ids():
+		var upgrade := get_meta_upgrade_definition(upgrade_id)
+		if upgrade.is_empty():
+			continue
+		entries.append({
+			"id": upgrade_id,
+			"name": str(upgrade.get("name", upgrade_id)),
+			"description": str(upgrade.get("description", "")),
+			"essence_cost": int(upgrade.get("essence_cost", 0)),
+			"purchased": purchased.has(upgrade_id),
+		})
+	return entries
+
+func get_meta_progression_data() -> Dictionary:
+	return {
+		"spent_essence": int(save_data.get("meta_spent_essence", 0)),
+		"purchased_ids": _copy_string_array(save_data.get("meta_unlock_ids", [])),
+		"record_capacity": get_replay_record_capacity(),
+		"upgrades": get_meta_upgrade_entries(),
+	}
+
+func can_purchase_meta_upgrade(upgrade_id: String) -> bool:
+	var upgrade := get_meta_upgrade_definition(upgrade_id)
+	if upgrade.is_empty():
+		return false
+	if _copy_string_array(save_data.get("meta_unlock_ids", [])).has(upgrade_id):
+		return false
+	return get_essence() >= int(upgrade.get("essence_cost", 0))
+
+func purchase_meta_upgrade(upgrade_id: String) -> bool:
+	if not can_purchase_meta_upgrade(upgrade_id):
+		return false
+	var upgrade := get_meta_upgrade_definition(upgrade_id)
+	if not spend_essence(int(upgrade.get("essence_cost", 0))):
+		return false
+	var purchased: Array[String] = _copy_string_array(save_data.get("meta_unlock_ids", []))
+	purchased.append(upgrade_id)
+	save_data["meta_unlock_ids"] = _unique_string_array(purchased)
+	save_data["meta_spent_essence"] = int(save_data.get("meta_spent_essence", 0)) + int(upgrade.get("essence_cost", 0))
+	for wing_id in _copy_string_array(upgrade.get("unlock_wing_ids", [])):
+		unlock_wing(wing_id, false)
+	for family_id in _copy_string_array(upgrade.get("unlock_curse_families", [])):
+		_unlock_curse_family(family_id)
+	record_replay_entry("meta_unlock", str(upgrade.get("name", upgrade_id)), str(upgrade.get("description", "")), {
+		"upgrade_id": upgrade_id,
+		"essence_cost": int(upgrade.get("essence_cost", 0)),
+	}, "")
+	progression_changed.emit()
+	save_changed.emit()
+	_save()
+	return true
+
+func get_replay_record_capacity() -> int:
+	var base_capacity := REPLAY_RECORD_LIMIT
+	for upgrade_id in _copy_string_array(save_data.get("meta_unlock_ids", [])):
+		var upgrade := get_meta_upgrade_definition(upgrade_id)
+		base_capacity += int(upgrade.get("record_capacity_bonus", 0))
+	return base_capacity
+
+func get_replay_records() -> Array[Dictionary]:
+	var records: Array[Dictionary] = []
+	for record in save_data.get("replay_records", []):
+		if typeof(record) != TYPE_DICTIONARY:
+			continue
+		records.append(record.duplicate(true))
+	return records
+
+func get_replay_records_text(limit: int = 12) -> String:
+	var records := get_replay_records()
+	if records.is_empty():
+		return "No archive records yet."
+	var lines: Array[String] = []
+	var start_index: int = max(0, records.size() - limit)
+	for index in range(start_index, records.size()):
+		var record: Dictionary = records[index]
+		lines.append("%s - %s" % [str(record.get("type", "record")), str(record.get("summary", ""))])
+	return "Archive records:\n- " + "\n- ".join(lines)
+
+func record_replay_entry(record_type: String, title: String, summary: String, payload: Dictionary = {}, request_id: String = "") -> void:
+	if record_type == "":
+		return
+	var records := get_replay_records()
+	records.append({
+		"type": record_type,
+		"title": title,
+		"summary": summary,
+		"turn": int(save_data.get("library_turn_count", 0)),
+		"request_id": request_id if request_id != "" else get_active_request_id(),
+		"payload": payload.duplicate(true),
+	})
+	while records.size() > get_replay_record_capacity():
+		records.pop_front()
+	save_data["replay_records"] = records
+	progression_changed.emit()
+	save_changed.emit()
+	_save()
+
+func get_progression_summary_text() -> String:
+	var lines: Array[String] = []
+	lines.append(get_wing_progression_text())
+	lines.append("")
+	lines.append(get_faction_progression_text())
+	lines.append("")
+	lines.append(get_selected_curse_summary_text())
+	lines.append("")
+	lines.append(get_meta_progression_text())
+	lines.append("")
+	lines.append(get_replay_records_text())
+	return "\n".join(lines)
+
+func get_wing_progression_text() -> String:
+	var lines: Array[String] = []
+	lines.append("Wings:")
+	for entry in get_wing_progression_entries():
+		lines.append("- %s: tier %d%s" % [
+			str(entry.get("name", entry.get("wing_id", ""))),
+			int(entry.get("tier", 0)),
+			" (active)" if bool(entry.get("is_active", false)) else "",
+		])
+	return "\n".join(lines)
+
+func get_faction_progression_text() -> String:
+	var lines: Array[String] = []
+	lines.append("Factions:")
+	for entry in get_faction_progression_entries():
+		lines.append("- %s: rep %d, tier %d" % [
+			str(entry.get("name", entry.get("id", ""))),
+			int(entry.get("reputation", 0)),
+			int(entry.get("tier", 0)),
+		])
+	return "\n".join(lines)
+
+func get_meta_progression_text() -> String:
+	var lines: Array[String] = []
+	lines.append("Meta progression:")
+	lines.append("Essence spent: %d" % int(save_data.get("meta_spent_essence", 0)))
+	for entry in get_meta_upgrade_entries():
+		lines.append("- %s%s" % [
+			str(entry.get("name", entry.get("id", ""))),
+			" (purchased)" if bool(entry.get("purchased", false)) else "",
+		])
+	return "\n".join(lines)
 
 func get_station_layout_id() -> String:
 	var layout_id := str(save_data.get("station_layout_id", "balanced"))
@@ -540,10 +1439,15 @@ func _complete_request_entry(entry: Dictionary, source: String = "") -> void:
 			unlocked_rooms.append(room_id_text)
 			save_data["unlocked_room_blueprint_ids"] = unlocked_rooms
 	grant_card_to_collection(str(request_data.get("reward_card_ids", []).front() if not request_data.get("reward_card_ids", []).is_empty() else ""))
+	_award_faction_reputation_for_request(request_data, source)
 	var active_request_id: String = _refill_request_queue_after_removal(queue)
 	save_data["request_queue"] = queue
 	save_data["active_request_id"] = active_request_id
 	save_data["completed_request_ids"] = _unique_string_array(save_data.get("completed_request_ids", []) + [request_id])
+	record_replay_entry("request_completion", str(content_db.get_request(request_id).name if content_db.get_request(request_id) != null else request_id), str(request_data.get("archive_reward_text", "")), {
+		"request_id": request_id,
+		"source": source,
+	}, request_id)
 	_record_request_history(request_id, "completed", source)
 	save_changed.emit()
 	_save()
@@ -654,6 +1558,29 @@ func get_active_deck_entries() -> Array:
 func get_active_archive_bonuses() -> Array[Dictionary]:
 	return save_data.get("active_archive_bonuses", []).duplicate(true)
 
+func get_active_run_bonuses() -> Array[Dictionary]:
+	var bonuses: Array[Dictionary] = []
+	for bonus in get_active_archive_bonuses():
+		bonuses.append(bonus.duplicate(true))
+	for wing_bonus in get_wing_modifiers(get_active_wing_id()):
+		bonuses.append(wing_bonus.duplicate(true))
+	for faction_bonus in get_faction_run_modifiers():
+		bonuses.append(faction_bonus.duplicate(true))
+	for curse_bonus in get_selected_curse_modifiers():
+		bonuses.append(curse_bonus.duplicate(true))
+	for meta_bonus in get_meta_run_modifiers():
+		bonuses.append(meta_bonus.duplicate(true))
+	return bonuses
+
+func get_faction_run_modifiers() -> Array[Dictionary]:
+	var modifiers: Array[Dictionary] = []
+	for faction_id in get_faction_definition_ids():
+		modifiers.append_array(get_faction_modifiers(faction_id))
+	return modifiers
+
+func get_meta_run_modifiers() -> Array[Dictionary]:
+	return []
+
 func get_active_archive_bonus_text() -> String:
 	var bonuses := get_active_archive_bonuses()
 	if bonuses.is_empty():
@@ -663,6 +1590,15 @@ func get_active_archive_bonus_text() -> String:
 	for bonus in bonuses:
 		lines.append("%s: %s" % [bonus.get("name", bonus.get("id", "")), bonus.get("description", "")])
 	return "Active bonuses:\n- " + "\n- ".join(lines)
+
+func get_active_run_bonus_text() -> String:
+	var bonuses := get_active_run_bonuses()
+	if bonuses.is_empty():
+		return "No active run modifiers yet."
+	var lines: Array[String] = []
+	for bonus in bonuses:
+		lines.append("%s: %s" % [str(bonus.get("name", bonus.get("id", ""))), str(bonus.get("description", ""))])
+	return "Active run modifiers:\n- " + "\n- ".join(lines)
 
 func get_active_deck_text() -> String:
 	var validation := get_active_deck_validation()
@@ -816,7 +1752,13 @@ func start_run():
 	current_run.room_cleared = false
 	current_run.reward_relic_id = ""
 	current_run.reward_choice_bonus_count = 0
-	current_run.active_bonuses = get_active_archive_bonuses()
+	current_run.active_wing_id = get_active_wing_id()
+	current_run.selected_curse_family_id = get_selected_curse_family_id()
+	current_run.selected_curse_ids = get_selected_curse_ids()
+	current_run.active_meta_unlock_ids = _copy_string_array(save_data.get("meta_unlock_ids", []))
+	current_run.faction_reputation_snapshot = _get_faction_reputation_snapshot()
+	current_run.run_modifiers = get_active_run_bonuses()
+	current_run.active_bonuses = current_run.run_modifiers.duplicate(true)
 	_apply_active_bonuses_to_run(current_run)
 	run_started.emit()
 	return current_run
@@ -851,11 +1793,32 @@ func finish_run(success: bool, tome_id: String = "", relic_id: String = "") -> v
 			reward_count
 		)
 		queue_card_reward_options(reward_options, "dive")
+		if current_run != null:
+			_apply_curse_completion_rewards(current_run)
 	else:
 		clear_pending_card_reward_options()
 
+	if current_run != null:
+		current_run.replay_summary = {
+			"success": success,
+			"request_id": current_run.request_id,
+			"tome_id": tome_id,
+			"relic_id": relic_id,
+			"wing_id": current_run.active_wing_id,
+			"curse_family_id": current_run.selected_curse_family_id,
+			"curse_ids": current_run.selected_curse_ids.duplicate(),
+		}
+		record_replay_entry(
+			"dive_success" if success else "dive_failure",
+			str(current_run.request_id),
+			("Completed dive for %s." % current_run.request_id) if success else ("Dive failed for %s." % current_run.request_id),
+			current_run.replay_summary,
+			current_run.request_id
+		)
+
 	advance_dive_turn()
 
+	clear_selected_curse_selection()
 	run_finished.emit(success, tome_id)
 	current_run = null
 	_save()
@@ -1006,13 +1969,18 @@ func _apply_active_bonuses_to_run(run_state) -> void:
 	run_state.bonus_reward_heal = 0
 	run_state.bonus_vs_enemy_kind = ""
 	run_state.bonus_vs_enemy_kind_damage = 0
+	var bonus_hp := 0
+	var bonus_insight := 0
 
-	for bonus in get_active_archive_bonuses():
+	for bonus in get_active_run_bonuses():
 		var modifiers: Dictionary = bonus.get("modifiers", {})
 		run_state.bonus_shield += int(modifiers.get("starting_shield", 0))
 		run_state.bonus_damage += int(modifiers.get("card_damage_bonus", 0))
 		run_state.bonus_cooldown_reduction += float(modifiers.get("cooldown_reduction_bonus", 0.0))
 		run_state.bonus_reward_heal += int(modifiers.get("reward_heal_bonus", 0))
+		run_state.reward_choice_bonus_count += int(modifiers.get("reward_choice_bonus_count", 0))
+		bonus_hp += int(modifiers.get("starting_hp", 0))
+		bonus_insight += int(modifiers.get("starting_insight", 0))
 
 		var enemy_kind := str(modifiers.get("bonus_vs_enemy_kind", ""))
 		if enemy_kind != "":
@@ -1022,7 +1990,48 @@ func _apply_active_bonuses_to_run(run_state) -> void:
 				int(modifiers.get("bonus_vs_enemy_kind_damage", 0))
 			)
 
-	run_state.shield += run_state.bonus_shield
+	run_state.shield = max(0, int(run_state.shield) + run_state.bonus_shield)
+	if bonus_hp != 0:
+		run_state.player_max_hp = max(1, int(run_state.player_max_hp) + bonus_hp)
+		run_state.player_hp = clamp(int(run_state.player_hp) + bonus_hp, 1, run_state.player_max_hp)
+	if bonus_insight != 0:
+		run_state.insight = max(0, int(run_state.insight) + bonus_insight)
+	run_state.reward_choice_bonus_count = max(0, int(run_state.reward_choice_bonus_count))
+
+func _get_faction_reputation_snapshot() -> Dictionary:
+	var snapshot: Dictionary = {}
+	for faction_id in get_faction_definition_ids():
+		snapshot[faction_id] = get_faction_reputation(faction_id)
+	return snapshot
+
+func _apply_curse_completion_rewards(run_state) -> void:
+	if run_state == null:
+		return
+	var curse_ids: Array[String] = _copy_string_array(run_state.selected_curse_ids)
+	if curse_ids.is_empty():
+		return
+	for curse_id in curse_ids:
+		var curse: Dictionary = get_curse_definition(curse_id)
+		if curse.is_empty():
+			continue
+		var clear_rewards: Dictionary = curse.get("clear_rewards", {})
+		if clear_rewards.is_empty():
+			continue
+		if int(clear_rewards.get("essence", 0)) != 0:
+			add_essence(int(clear_rewards.get("essence", 0)))
+		if int(clear_rewards.get("relic_bias", 0)) > 0:
+			var relic_id: String = content_db.pick_relic_reward(int(run_state.run_seed) + int(clear_rewards.get("relic_bias", 0)), get_archive_relics())
+			if relic_id != "":
+				grant_relic(relic_id)
+		if clear_rewards.has("reputation") and typeof(clear_rewards.get("reputation", {})) == TYPE_DICTIONARY:
+			for faction_id in clear_rewards.get("reputation", {}).keys():
+				add_faction_reputation(str(faction_id), int(clear_rewards.get("reputation", {}).get(faction_id, 0)), curse_id)
+		var record_type := str(clear_rewards.get("record", ""))
+		if record_type != "":
+			record_replay_entry(record_type, str(curse.get("name", curse_id)), str(curse.get("description", "")), {
+				"curse_id": curse_id,
+				"family_id": get_curse_family_for_curse(curse_id),
+			}, run_state.request_id)
 
 func _commit_archive_slots(slots: Array) -> void:
 	save_data["archive_slots"] = _duplicate_archive_slots(slots)
@@ -1170,6 +2179,102 @@ func _normalize_essence_state() -> void:
 	if not STATION_LAYOUTS.has(layout_id):
 		save_data["station_layout_id"] = "balanced"
 
+func _normalize_progression_state() -> void:
+	var wings: Dictionary = save_data.get("wing_progression", {})
+	var normalized_wings: Dictionary = {}
+	var unlocked_curse_ids: Array[String] = _copy_string_array(save_data.get("unlocked_curse_ids", []))
+	for wing_id in get_wing_definition_ids():
+		var wing_def := get_wing_definition(wing_id)
+		if wing_def.is_empty():
+			continue
+		var wing_state: Dictionary = {}
+		if typeof(wings.get(wing_id, {})) == TYPE_DICTIONARY:
+			wing_state = wings.get(wing_id, {}).duplicate(true)
+		if wing_state.is_empty():
+			wing_state = {
+				"wing_id": wing_id,
+				"unlocked": bool(wing_def.get("unlocked_by_default", false)),
+				"tier": 0,
+				"purchased_upgrade_ids": [],
+			}
+		wing_state["wing_id"] = wing_id
+		wing_state["unlocked"] = bool(wing_state.get("unlocked", false)) or bool(wing_def.get("unlocked_by_default", false))
+		wing_state["tier"] = int(clamp(int(wing_state.get("tier", 0)), 0, int(wing_def.get("upgrades", []).size())))
+		wing_state["purchased_upgrade_ids"] = _unique_string_array(_copy_string_array(wing_state.get("purchased_upgrade_ids", [])))
+		normalized_wings[wing_id] = wing_state
+	save_data["wing_progression"] = normalized_wings
+
+	var active_wing_id := str(save_data.get("active_wing_id", ""))
+	if active_wing_id == "" or not bool(normalized_wings.get(active_wing_id, {}).get("unlocked", false)):
+		active_wing_id = ""
+		for wing_id in get_wing_definition_ids():
+			if bool(normalized_wings.get(wing_id, {}).get("unlocked", false)):
+				active_wing_id = wing_id
+				break
+	save_data["active_wing_id"] = active_wing_id
+
+	var faction_reputation: Dictionary = save_data.get("faction_reputation", {})
+	var normalized_reputation: Dictionary = {}
+	for faction_id in get_faction_definition_ids():
+		normalized_reputation[faction_id] = max(0, int(faction_reputation.get(faction_id, 0)))
+	save_data["faction_reputation"] = normalized_reputation
+
+	var meta_unlock_ids: Array[String] = _unique_string_array(_copy_string_array(save_data.get("meta_unlock_ids", [])))
+	save_data["meta_unlock_ids"] = meta_unlock_ids
+	save_data["meta_spent_essence"] = max(0, int(save_data.get("meta_spent_essence", 0)))
+
+	var unlocked_family_ids: Array[String] = []
+	for family_id in get_curse_family_ids():
+		var family := get_curse_family_definition(family_id)
+		if family.is_empty():
+			continue
+		if bool(family.get("unlocked_by_default", false)) or meta_unlock_ids.has("unlock_%s" % family_id):
+			unlocked_family_ids.append(family_id)
+			for curse in family.get("curses", []):
+				if typeof(curse) != TYPE_DICTIONARY:
+					continue
+				var curse_id := str(curse.get("id", ""))
+				if curse_id != "" and not unlocked_curse_ids.has(curse_id):
+					unlocked_curse_ids.append(curse_id)
+	save_data["unlocked_curse_ids"] = _unique_string_array(unlocked_curse_ids)
+
+	var selected_family_id := str(save_data.get("selected_curse_family_id", ""))
+	if selected_family_id != "" and not unlocked_family_ids.has(selected_family_id):
+		selected_family_id = ""
+	var selected_curse_ids: Array[String] = []
+	var selected_curse_id := str(save_data.get("selected_curse_id", ""))
+	if selected_family_id != "":
+		selected_curse_ids = _filter_curses_for_family(_copy_string_array(save_data.get("selected_curse_ids", [])), selected_family_id)
+		if selected_curse_id != "" and get_curse_family_for_curse(selected_curse_id) == selected_family_id and not selected_curse_ids.has(selected_curse_id):
+			selected_curse_ids.append(selected_curse_id)
+	if selected_curse_ids.is_empty() and selected_curse_id != "":
+		var selected_family_from_id := get_curse_family_for_curse(selected_curse_id)
+		if selected_family_from_id != "" and unlocked_family_ids.has(selected_family_from_id):
+			selected_family_id = selected_family_from_id
+			selected_curse_ids = [selected_curse_id]
+	save_data["selected_curse_family_id"] = selected_family_id
+	save_data["selected_curse_ids"] = selected_curse_ids
+	save_data["selected_curse_id"] = selected_curse_ids.front() if not selected_curse_ids.is_empty() else ""
+
+	var records: Array[Dictionary] = []
+	for record in save_data.get("replay_records", []):
+		if typeof(record) != TYPE_DICTIONARY:
+			continue
+		var payload: Dictionary = {}
+		if typeof(record.get("payload", {})) == TYPE_DICTIONARY:
+			payload = record.get("payload", {}).duplicate(true)
+		records.append({
+			"type": str(record.get("type", "")),
+			"title": str(record.get("title", "")),
+			"summary": str(record.get("summary", "")),
+			"turn": max(0, int(record.get("turn", 0))),
+			"request_id": str(record.get("request_id", "")),
+			"payload": payload,
+		})
+	while records.size() > get_replay_record_capacity():
+		records.pop_front()
+	save_data["replay_records"] = records
+
 func _normalize_request_state() -> void:
 	var queue := _duplicate_request_queue(save_data.get("request_queue", []))
 	if queue.is_empty():
@@ -1235,6 +2340,57 @@ func _get_request_deadline_kind(request_data: Dictionary) -> String:
 	if request_data.get("required_knowledge_tags", []).size() > 0:
 		return "library"
 	return "dive"
+
+func _award_faction_reputation_for_request(request_data: Dictionary, source: String = "") -> void:
+	var faction_id := _resolve_faction_id_for_request(request_data)
+	if faction_id == "":
+		return
+	var request_name := str(request_data.get("name", request_data.get("id", "")))
+	add_faction_reputation(faction_id, 1, request_name if source == "" else source)
+
+func _resolve_faction_id_for_request(request_data: Dictionary) -> String:
+	var tags: Array[String] = _copy_string_array(request_data.get("required_knowledge_tags", []))
+	var request_id := str(request_data.get("id", request_data.get("request_id", "")))
+	if tags.is_empty() and request_id != "":
+		var request = content_db.get_request(request_id)
+		if request != null:
+			tags = _copy_string_array(request.required_knowledge_tags)
+	for faction_id in get_faction_definition_ids():
+		var faction := get_faction_definition(faction_id)
+		for tag in tags:
+			if _copy_string_array(faction.get("tracked_tags", [])).has(tag):
+				return faction_id
+	return ""
+
+func _unlock_curse_family(family_id: String) -> void:
+	if family_id == "":
+		return
+	var token := "unlock_%s" % family_id
+	var unlock_ids: Array[String] = _copy_string_array(save_data.get("meta_unlock_ids", []))
+	if not unlock_ids.has(token):
+		unlock_ids.append(token)
+	save_data["meta_unlock_ids"] = _unique_string_array(unlock_ids)
+	var unlocked_curse_ids: Array[String] = _copy_string_array(save_data.get("unlocked_curse_ids", []))
+	var family := get_curse_family_definition(family_id)
+	for curse in family.get("curses", []):
+		if typeof(curse) != TYPE_DICTIONARY:
+			continue
+		var curse_id := str(curse.get("id", ""))
+		if curse_id != "" and not unlocked_curse_ids.has(curse_id):
+			unlocked_curse_ids.append(curse_id)
+	save_data["unlocked_curse_ids"] = _unique_string_array(unlocked_curse_ids)
+
+func _filter_curses_for_family(curse_ids: Array, family_id: String) -> Array[String]:
+	var selected: Array[String] = []
+	for curse_id in curse_ids:
+		var curse_text := str(curse_id)
+		if curse_text == "":
+			continue
+		if get_curse_family_for_curse(curse_text) != family_id:
+			continue
+		if not selected.has(curse_text):
+			selected.append(curse_text)
+	return selected
 
 func _get_request_queue_entry_for_id(request_id: String) -> Dictionary:
 	var queue := get_request_queue_entries()
