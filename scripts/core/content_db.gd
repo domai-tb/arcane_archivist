@@ -776,6 +776,23 @@ func validate_content() -> Array[String]:
 				errors.append("Empty request template branch reward id on %s." % template_id)
 			elif get_card(branch_id_text) == null and get_request(branch_id_text) == null and get_replay_record(branch_id_text) == null:
 				errors.append("Invalid request template branch reward id: %s on %s" % [branch_id_text, template_id])
+	for pressure_event_id in get_pressure_event_ids():
+		var pressure_event = get_pressure_event_runtime_data(pressure_event_id)
+		if pressure_event.is_empty():
+			errors.append("Missing pressure event id: %s" % pressure_event_id)
+			continue
+		var effect_types := ["clear", "remove_archive_item", "delay_request", "set_station_layout"]
+		for option in pressure_event.get("response_options", []):
+			if typeof(option) != TYPE_DICTIONARY:
+				errors.append("Invalid pressure event option on %s." % pressure_event_id)
+				continue
+			if str(option.get("id", "")) == "":
+				errors.append("Empty pressure event option id on %s." % pressure_event_id)
+			var effect_type := str(option.get("effect_type", ""))
+			if not effect_types.has(effect_type):
+				errors.append("Invalid pressure event option effect: %s on %s" % [effect_type, pressure_event_id])
+			if effect_type == "set_station_layout" and str(option.get("layout_id", "")) == "":
+				errors.append("Invalid pressure event layout id on %s." % pressure_event_id)
 	for variant_id in card_variant_order:
 		var variant = get_card_variant(variant_id)
 		if variant == null:
@@ -932,6 +949,373 @@ func build_0_3_dungeon_layout(seed_value: int) -> Array[Dictionary]:
 
 	layout.append({"room_id": "tome_room", "role": "tome"})
 	return layout
+
+func get_dungeon_theme_ids() -> Array[String]:
+	return ["forbidden_history", "beast_lore", "astral_theory", "wardcraft"]
+
+func get_dungeon_theme_runtime_data(theme_id: String) -> Dictionary:
+	var themes := {
+		"forbidden_history": {
+			"id": "forbidden_history",
+			"name": "Archive Echoes",
+			"description": "Censored stacks and card-choice rooms make the dive feel like a tight archival audit.",
+			"preview_text": "Expect a higher chance of elite pressure and reward routing that leans toward card choices.",
+		},
+		"beast_lore": {
+			"id": "beast_lore",
+			"name": "Feral Stacks",
+			"description": "Mireling-heavy chambers and hazard rooms reward measured movement.",
+			"preview_text": "Expect more melee pressure, more hazard rooms, and steadier rest rewards.",
+		},
+		"astral_theory": {
+			"id": "astral_theory",
+			"name": "Starfall Annex",
+			"description": "Wisp-led routes and puzzle nooks reward precise card sequencing.",
+			"preview_text": "Expect ranged pressure, puzzle rooms, and a stronger card-choice bias.",
+		},
+		"wardcraft": {
+			"id": "wardcraft",
+			"name": "Wardline Vault",
+			"description": "Guard rooms and sturdy recovery make the route feel safer but slower.",
+			"preview_text": "Expect steadier enemy mixes, fewer hazards, and more rest-oriented rewards.",
+		},
+	}
+	var theme: Dictionary = themes.get(theme_id, themes["wardcraft"])
+	if typeof(theme) != TYPE_DICTIONARY:
+		return {}
+	return theme.duplicate(true)
+
+func get_dungeon_theme_id_for_request(request_id: String) -> String:
+	var request = get_request(request_id)
+	if request == null:
+		return "wardcraft"
+
+	var tags: Array = request.required_knowledge_tags
+	if tags.has("astral_theory"):
+		return "astral_theory"
+	if tags.has("beast_lore"):
+		return "beast_lore"
+	if tags.has("forbidden_history"):
+		return "forbidden_history"
+	if tags.has("wardcraft"):
+		return "wardcraft"
+	return "wardcraft"
+
+func get_dungeon_theme_preview_data(request_id: String) -> Dictionary:
+	var theme_id := get_dungeon_theme_id_for_request(request_id)
+	var theme := get_dungeon_theme_runtime_data(theme_id)
+	if theme.is_empty():
+		return {}
+	var request = get_request(request_id)
+	return {
+		"theme_id": theme_id,
+		"name": str(theme.get("name", theme_id)),
+		"description": str(theme.get("description", "")),
+		"preview_text": str(theme.get("preview_text", "")),
+		"request_name": request.name if request != null else "",
+	}
+
+func get_dungeon_theme_preview_text(request_id: String) -> String:
+	var data := get_dungeon_theme_preview_data(request_id)
+	if data.is_empty():
+		return "Dungeon theme: Wardline Vault\nA safe, balanced route."
+	var lines: Array[String] = []
+	lines.append("Dungeon theme: %s" % str(data.get("name", data.get("theme_id", ""))))
+	lines.append(str(data.get("description", "")))
+	var preview_text := str(data.get("preview_text", ""))
+	if preview_text != "":
+		lines.append(preview_text)
+	return "\n".join(lines)
+
+func build_dungeon_layout(seed_value: int, request_id: String = "") -> Array[Dictionary]:
+	var theme_id := get_dungeon_theme_id_for_request(request_id)
+	var layout := _build_dungeon_theme_layout(theme_id, seed_value)
+	for entry in layout:
+		if typeof(entry) == TYPE_DICTIONARY:
+			entry["theme_id"] = theme_id
+	return layout
+
+func _build_dungeon_theme_layout(theme_id: String, seed_value: int) -> Array[Dictionary]:
+	match theme_id:
+		"beast_lore":
+			return _build_beast_lore_layout(seed_value)
+		"astral_theory":
+			return _build_astral_theory_layout(seed_value)
+		"wardcraft":
+			return _build_wardcraft_layout(seed_value)
+		_:
+			return _build_forbidden_history_layout(seed_value)
+
+func _build_forbidden_history_layout(seed_value: int) -> Array[Dictionary]:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value ^ 0x6F5A
+	var layout: Array[Dictionary] = [{"room_id": "entrance", "role": "entrance"}]
+	if rng.randf() < 0.5:
+		layout.append({"room_id": "encounter_wisp", "role": "encounter"})
+		layout.append({"room_id": "optional_card_choice", "role": "optional"})
+		layout.append({"room_id": "encounter_mireling", "role": "encounter"})
+		layout.append({"room_id": "elite_scriptorium", "role": "elite"})
+		layout.append({"room_id": "reward_room", "role": "reward", "reward_kind": "card_choice"})
+	else:
+		layout.append({"room_id": "optional_puzzle_nook", "role": "optional"})
+		layout.append({"room_id": "encounter_mireling", "role": "encounter"})
+		layout.append({"room_id": "optional_relic_cache", "role": "optional"})
+		layout.append({"room_id": "encounter_wisp", "role": "encounter"})
+		layout.append({"room_id": "reward_room", "role": "reward", "reward_kind": "rest"})
+	layout.append({"room_id": "tome_room", "role": "tome"})
+	return layout
+
+func _build_beast_lore_layout(seed_value: int) -> Array[Dictionary]:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value ^ 0x2B71
+	var layout: Array[Dictionary] = [{"room_id": "entrance", "role": "entrance"}]
+	layout.append({"room_id": "encounter_mireling", "role": "encounter"})
+	if rng.randf() < 0.5:
+		layout.append({"room_id": "optional_hazard", "role": "optional"})
+		layout.append({"room_id": "encounter_mireling", "role": "encounter"})
+	else:
+		layout.append({"room_id": "optional_guard", "role": "optional"})
+		layout.append({"room_id": "encounter_wisp", "role": "encounter"})
+	layout.append({"room_id": "optional_relic_cache", "role": "optional"})
+	layout.append({"room_id": "reward_room", "role": "reward", "reward_kind": "rest"})
+	layout.append({"room_id": "tome_room", "role": "tome"})
+	return layout
+
+func _build_astral_theory_layout(seed_value: int) -> Array[Dictionary]:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value ^ 0x44C3
+	var layout: Array[Dictionary] = [{"room_id": "entrance", "role": "entrance"}]
+	layout.append({"room_id": "encounter_wisp", "role": "encounter"})
+	if rng.randf() < 0.5:
+		layout.append({"room_id": "optional_puzzle_nook", "role": "optional"})
+		layout.append({"room_id": "encounter_wisp", "role": "encounter"})
+	else:
+		layout.append({"room_id": "optional_card_choice", "role": "optional"})
+		layout.append({"room_id": "encounter_mireling", "role": "encounter"})
+	layout.append({"room_id": "reward_room", "role": "reward", "reward_kind": "card_choice"})
+	layout.append({"room_id": "tome_room", "role": "tome"})
+	return layout
+
+func _build_wardcraft_layout(seed_value: int) -> Array[Dictionary]:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value ^ 0x5C29
+	var layout: Array[Dictionary] = [{"room_id": "entrance", "role": "entrance"}]
+	layout.append({"room_id": "encounter_mireling", "role": "encounter"})
+	if rng.randf() < 0.5:
+		layout.append({"room_id": "optional_guard", "role": "optional"})
+		layout.append({"room_id": "encounter_wisp", "role": "encounter"})
+		layout.append({"room_id": "reward_room", "role": "reward", "reward_kind": "rest"})
+	else:
+		layout.append({"room_id": "optional_relic_cache", "role": "optional"})
+		layout.append({"room_id": "elite_scriptorium", "role": "elite"})
+		layout.append({"room_id": "reward_room", "role": "reward", "reward_kind": "rest"})
+	layout.append({"room_id": "tome_room", "role": "tome"})
+	return layout
+
+func get_pressure_event_ids() -> Array[String]:
+	return ["archive_breach", "shelf_shift", "relic_drift", "queue_clog", "station_stutter", "visitor_rush"]
+
+func get_pressure_event_runtime_data(event_id: String) -> Dictionary:
+	var events := {
+		"shelf_shift": {
+			"id": "shelf_shift",
+			"name": "Shelf Shift",
+			"description": "A shelf tremor threatens a placed tome or relic.",
+			"threat_kind": "archive",
+			"threat_assets": ["tome", "relic"],
+			"response_options": [
+				{
+					"id": "brace",
+					"name": "Brace the shelves",
+					"description": "Spend 1 essence to stabilize the archive.",
+					"essence_cost": 1,
+					"effect_type": "clear",
+				},
+				{
+					"id": "tome_shift",
+					"name": "Unpin a tome",
+					"description": "Move one tome out of the archive to protect the rest.",
+					"essence_cost": 0,
+					"effect_type": "remove_archive_item",
+					"item_type": "tome",
+				},
+				{
+					"id": "relic_shift",
+					"name": "Unpin a relic",
+					"description": "Move one relic out of the archive to protect the rest.",
+					"essence_cost": 0,
+					"effect_type": "remove_archive_item",
+					"item_type": "relic",
+				},
+			],
+		},
+		"archive_breach": {
+			"id": "archive_breach",
+			"name": "Archive Breach",
+			"description": "A hostile raider force tries to crack open the archive stacks.",
+			"threat_kind": "attack",
+			"threat_assets": ["archive", "station"],
+			"response_options": [
+				{
+					"id": "seal",
+					"name": "Seal the breach",
+					"description": "Spend 1 essence to lock the attack down before it spreads.",
+					"essence_cost": 1,
+					"effect_type": "clear",
+				},
+				{
+					"id": "relocate",
+					"name": "Relocate a tome",
+					"description": "Move one tome out of danger to preserve the archive.",
+					"essence_cost": 0,
+					"effect_type": "remove_archive_item",
+					"item_type": "tome",
+				},
+				{
+					"id": "reroute",
+					"name": "Reroute the queue",
+					"description": "Delay the active request while staff seal the stacks.",
+					"essence_cost": 0,
+					"effect_type": "delay_request",
+					"delay_turns": 1,
+				},
+			],
+		},
+		"relic_drift": {
+			"id": "relic_drift",
+			"name": "Relic Drift",
+			"description": "A catalog surge nudges a relic off its marked placement.",
+			"threat_kind": "archive",
+			"threat_assets": ["relic"],
+			"response_options": [
+				{
+					"id": "brace",
+					"name": "Brace the reliquary",
+					"description": "Spend 1 essence to hold the placement steady.",
+					"essence_cost": 1,
+					"effect_type": "clear",
+				},
+				{
+					"id": "relic_shift",
+					"name": "Re-shelve the relic",
+					"description": "Move one relic out of the archive to avoid the drift.",
+					"essence_cost": 0,
+					"effect_type": "remove_archive_item",
+					"item_type": "relic",
+				},
+			],
+		},
+		"queue_clog": {
+			"id": "queue_clog",
+			"name": "Queue Clog",
+			"description": "The patron board buckles under too many requests at once.",
+			"threat_kind": "queue",
+			"threat_assets": ["request"],
+			"response_options": [
+				{
+					"id": "brace",
+					"name": "Smooth the queue",
+					"description": "Spend 1 essence to steady the request board.",
+					"essence_cost": 1,
+					"effect_type": "clear",
+				},
+				{
+					"id": "delay",
+					"name": "Delay the active request",
+					"description": "Buy one extra turn for the current request.",
+					"essence_cost": 0,
+					"effect_type": "delay_request",
+					"delay_turns": 1,
+				},
+			],
+		},
+		"station_stutter": {
+			"id": "station_stutter",
+			"name": "Station Stutter",
+			"description": "The station layout slips out of alignment.",
+			"threat_kind": "station",
+			"threat_assets": ["station"],
+			"response_options": [
+				{
+					"id": "brace",
+					"name": "Reanchor the stations",
+					"description": "Spend 1 essence to hold the current layout.",
+					"essence_cost": 1,
+					"effect_type": "clear",
+				},
+				{
+					"id": "reset",
+					"name": "Reset to balanced",
+					"description": "Return the layout to its balanced baseline.",
+					"essence_cost": 0,
+					"effect_type": "set_station_layout",
+					"layout_id": "balanced",
+				},
+			],
+		},
+		"visitor_rush": {
+			"id": "visitor_rush",
+			"name": "Visitor Rush",
+			"description": "A crowd surge crowds the request board and the archive desk.",
+			"threat_kind": "visitor",
+			"threat_assets": ["request", "station"],
+			"response_options": [
+				{
+					"id": "brace",
+					"name": "Guide the crowd",
+					"description": "Spend 1 essence to calm the rush.",
+					"essence_cost": 1,
+					"effect_type": "clear",
+				},
+				{
+					"id": "delay",
+					"name": "Absorb the backlog",
+					"description": "Buy one extra turn for the active request.",
+					"essence_cost": 0,
+					"effect_type": "delay_request",
+					"delay_turns": 1,
+				},
+			],
+		},
+	}
+	var event: Dictionary = events.get(event_id, events["station_stutter"])
+	if typeof(event) != TYPE_DICTIONARY:
+		return {}
+	return event.duplicate(true)
+
+func get_pressure_event_id_for_request(request_id: String, turn_index: int = 0) -> String:
+	var pool: Array[String] = get_pressure_event_ids()
+	if pool.is_empty():
+		return ""
+	var request = get_request(request_id)
+	if request == null:
+		return pool[turn_index % pool.size()]
+
+	var themed_pool: Array[String] = []
+	var tags: Array = request.required_knowledge_tags
+	if tags.has("forbidden_history"):
+		themed_pool = ["archive_breach", "shelf_shift", "relic_drift", "station_stutter"]
+	elif tags.has("beast_lore"):
+		themed_pool = ["visitor_rush", "queue_clog", "archive_breach"]
+	elif tags.has("astral_theory"):
+		themed_pool = ["queue_clog", "visitor_rush", "archive_breach"]
+	elif tags.has("wardcraft"):
+		themed_pool = ["archive_breach", "station_stutter", "shelf_shift", "relic_drift"]
+	if themed_pool.is_empty():
+		themed_pool = pool
+	return themed_pool[turn_index % themed_pool.size()]
+
+func get_pressure_event_preview_text(request_id: String, turn_index: int = 0) -> String:
+	var event_id := get_pressure_event_id_for_request(request_id, turn_index)
+	var event := get_pressure_event_runtime_data(event_id)
+	if event.is_empty():
+		return "No pressure event is currently available."
+	var lines: Array[String] = []
+	lines.append("%s: %s" % [str(event.get("name", event_id)), str(event.get("description", ""))])
+	var assets: Array = event.get("threat_assets", [])
+	if not assets.is_empty():
+		lines.append("Threatened assets: %s." % ", ".join(assets))
+	return "\n".join(lines)
 
 func _build_content() -> void:
 	if not cards.is_empty():
@@ -1187,6 +1571,9 @@ func _build_content() -> void:
 		"wardline_sigil",
 		"sealed_step",
 		"lattice_guard",
+		"sigil_chart_prime",
+		"moon_stride_lens",
+		"arc_bolt_lattice",
 	]
 
 	_add_enemy("mireling", "Mireling", "A small chaser that keeps moving.", 3, 55.0, 1, 24.0, 1.0, "melee", 0.0)
@@ -2020,6 +2407,63 @@ func _build_content() -> void:
 		["quiet_margin_accord"],
 		[]
 	)
+	_add_card_variant(
+		"sigil_chart_prime",
+		"Sigil Chart Prime",
+		"A more decisive sigil chart for archive audits.",
+		"sigil_chart",
+		"archive_bastion",
+		0,
+		-0.2,
+		0.0,
+		0.0,
+		0.0,
+		0,
+		1,
+		0.0,
+		["forbidden_history"],
+		[],
+		["quiet_margin_bastion"],
+		[]
+	)
+	_add_card_variant(
+		"moon_stride_lens",
+		"Moon Stride Lens",
+		"A quieter moon stride that carries the runner farther.",
+		"moon_stride",
+		"astral_branch",
+		0,
+		-0.2,
+		0.0,
+		0.0,
+		40.0,
+		0,
+		0,
+		0.0,
+		["astral_theory"],
+		[],
+		["quiet_margin_lens"],
+		[]
+	)
+	_add_card_variant(
+		"arc_bolt_lattice",
+		"Arc Bolt Lattice",
+		"A structured arc bolt tuned to the ward chain.",
+		"arc_bolt",
+		"ward_branch",
+		0,
+		0.0,
+		1.0,
+		40.0,
+		0.0,
+		0,
+		0,
+		40.0,
+		["wardcraft"],
+		[],
+		["quiet_margin_cloister"],
+		[]
+	)
 
 	_add_request(
 		"quiet_margin_audience",
@@ -2081,6 +2525,106 @@ func _build_content() -> void:
 		"quiet_margin_conclave",
 		{"faction_reputation": {"quiet_margin_conclave": 2}, "wing_progression": {"wardwing_bastion": 2}, "unlock_wing_ids": ["wardwing_bastion"], "record_kind": "wing_unlock"}
 	)
+	_add_request(
+		"quiet_margin_bastion",
+		"Quiet Margin Bastion",
+		"ward_primer",
+		"Return a ward primer and a forbidden-ink sample to reinforce the archive's outer margin.",
+		"The conclave pays in essence and a sharper defensive pattern.",
+		"The archive remembers the bastion line.",
+		4,
+		["wardcraft", "forbidden_history"],
+		["ward_primer"],
+		["void_ink_vial"],
+		1,
+		3,
+		["sigil_chart_prime"],
+		["request_archive_cache"],
+		["sigil_chart_prime"],
+		[],
+		"quiet_margin_conclave",
+		{"faction_reputation": {"quiet_margin_conclave": 1}, "wing_progression": {"wardwing_bastion": 1}}
+	)
+	_add_request(
+		"quiet_margin_lens",
+		"Quiet Margin Lens",
+		"moon_catalog",
+		"Bring a moon catalog and a star sample so the conclave can chart a safer route.",
+		"The conclave pays in essence and a brighter movement pattern.",
+		"The archive remembers the lens route.",
+		4,
+		["wardcraft", "astral_theory"],
+		["copper_atlas"],
+		["star_salt_shard"],
+		0,
+		3,
+		["moon_stride_lens"],
+		["request_tome_cache"],
+		["moon_stride_lens"],
+		[],
+		"quiet_margin_conclave",
+		{"faction_reputation": {"quiet_margin_conclave": 1}, "wing_progression": {"wardwing_bastion": 1}}
+	)
+	_add_request(
+		"quiet_margin_cloister",
+		"Quiet Margin Cloister",
+		"wildbark_bestiary",
+		"Return the bestiary and a horn sample so the conclave can quiet the field wing.",
+		"The conclave pays in essence and a steadier striking pattern.",
+		"The archive remembers the cloister route.",
+		4,
+		["wardcraft", "beast_lore"],
+		["wildbark_bestiary"],
+		["bramble_horn_sample"],
+		0,
+		3,
+		["arc_bolt_lattice"],
+		["request_relic_cache"],
+		["arc_bolt_lattice"],
+		[],
+		"quiet_margin_conclave",
+		{"faction_reputation": {"quiet_margin_conclave": 1}, "wing_progression": {"wardwing_bastion": 1}}
+	)
+	_add_request(
+		"quiet_margin_archive",
+		"Quiet Margin Archive",
+		"black_index",
+		"Return the black index and a vial of void ink so the conclave can audit censored holdings.",
+		"The conclave pays in essence and a more disciplined archive pattern.",
+		"The archive remembers the audit route.",
+		5,
+		["wardcraft", "forbidden_history"],
+		["black_index"],
+		["sealwax_matrix"],
+		1,
+		4,
+		["sealed_step"],
+		["request_archive_cache"],
+		["sealed_step"],
+		[],
+		"quiet_margin_conclave",
+		{"faction_reputation": {"quiet_margin_conclave": 1}, "wing_progression": {"wardwing_bastion": 1}}
+	)
+	_add_request(
+		"quiet_margin_concord",
+		"Quiet Margin Concord",
+		"vellum_mirror",
+		"Bring the mirror, a sealing sample, and a corridor map to close the loop on the ward chain.",
+		"The conclave pays in essence and a final control pattern.",
+		"The archive remembers the concord.",
+		5,
+		["wardcraft", "astral_theory", "forbidden_history"],
+		["copper_atlas", "vellum_mirror"],
+		["sealwax_matrix"],
+		2,
+		5,
+		["lattice_guard"],
+		["request_archive_cache"],
+		["lattice_guard"],
+		[],
+		"quiet_margin_conclave",
+		{"faction_reputation": {"quiet_margin_conclave": 2}, "wing_progression": {"wardwing_bastion": 2}, "unlock_wing_ids": ["wardwing_bastion"], "record_kind": "request_chain"}
+	)
 
 	request_order = [
 		"recover_ashen_index",
@@ -2094,6 +2638,11 @@ func _build_content() -> void:
 		"quiet_margin_audience",
 		"quiet_margin_relay",
 		"quiet_margin_accord",
+		"quiet_margin_bastion",
+		"quiet_margin_lens",
+		"quiet_margin_cloister",
+		"quiet_margin_archive",
+		"quiet_margin_concord",
 	]
 	request_state_order = ["queued", "active", "in_progress", "completed", "expired"]
 	knowledge_tag_order = ["forbidden_history", "beast_lore", "astral_theory", "wardcraft"]
@@ -2121,7 +2670,7 @@ func _build_content() -> void:
 		"quiet_margin_relay_template",
 		"quiet_margin_accord_template",
 	]
-	card_variant_order = ["wardline_sigil", "sealed_step", "lattice_guard"]
+	card_variant_order = ["wardline_sigil", "sealed_step", "lattice_guard", "sigil_chart_prime", "moon_stride_lens", "arc_bolt_lattice"]
 
 func _add_request(id: String, request_name: String, tome_id: String, objective_text: String, reward_text: String, archive_reward_text: String, deadline_turns: int = 0, required_knowledge_tags: Array[String] = [], required_tome_ids: Array[String] = [], required_relic_ids: Array[String] = [], required_essence: int = 0, reward_essence: int = 0, reward_card_ids: Array[String] = [], reward_room_ids: Array[String] = [], unlock_card_ids: Array[String] = [], unlock_room_ids: Array[String] = [], faction_id: String = "", progression_rewards: Dictionary = {}) -> void:
 	var request := RequestDefinitionClass.new()
@@ -2246,10 +2795,10 @@ func _add_archive_wing(id: String, wing_name: String, description: String, focus
 	if not archive_wing_order.has(id):
 		archive_wing_order.append(id)
 
-func _add_relic_set(id: String, set_name: String, description: String, relic_ids: Array[String], bonuses: Array[Dictionary]) -> void:
+func _add_relic_set(id: String, relic_set_name: String, description: String, relic_ids: Array[String], bonuses: Array[Dictionary]) -> void:
 	var relic_set := RelicSetDefinitionClass.new()
 	relic_set.id = id
-	relic_set.name = set_name
+	relic_set.name = relic_set_name
 	relic_set.description = description
 	relic_set.relic_ids = relic_ids
 	relic_set.bonuses = bonuses
@@ -2405,3 +2954,38 @@ func _add_card_variant(id: String, variant_name: String, description: String, ba
 	card_variants[id] = variant
 	if not card_variant_order.has(id):
 		card_variant_order.append(id)
+
+	if cards.has(id):
+		return
+
+	var base_card = get_card(base_card_id)
+	if base_card == null:
+		return
+
+	var card := CardDefinitionClass.new()
+	card.id = id
+	card.name = variant_name
+	card.description = description
+	card.cost = max(0, int(base_card.cost) + cost_delta)
+	card.cooldown = max(0.0, float(base_card.cooldown) + cooldown_delta)
+	card.kind = base_card.kind
+	card.role = base_card.role
+	card.tags = base_card.tags.duplicate()
+	for tag in removed_tags:
+		card.tags.erase(str(tag))
+	for tag in added_tags:
+		var tag_text := str(tag)
+		if tag_text != "" and not card.tags.has(tag_text):
+			card.tags.append(tag_text)
+	card.power = float(base_card.power) + power_delta
+	card.reach = float(base_card.reach) + reach_delta
+	card.move_bonus = float(base_card.move_bonus) + move_bonus_delta
+	card.shield = max(0, int(base_card.shield) + shield_delta)
+	card.insight_restore = max(0, int(base_card.insight_restore) + insight_restore_delta)
+	card.projectile_speed = float(base_card.projectile_speed) + projectile_speed_delta
+	card.unlock_request_ids = base_card.unlock_request_ids.duplicate()
+	for request_id in unlock_request_ids:
+		var request_id_text := str(request_id)
+		if request_id_text != "" and not card.unlock_request_ids.has(request_id_text):
+			card.unlock_request_ids.append(request_id_text)
+	cards[id] = card

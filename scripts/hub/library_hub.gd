@@ -47,7 +47,7 @@ func _build_interactables() -> void:
 	board.kind = "request_board"
 	board.display_name = "Request Board"
 	board.body_text = "Review the patron queue and request deadlines."
-	board.accent_color = Color(0.8, 0.67, 0.42)
+	board.accent_color = _get_interactable_accent("request_board")
 	board.position = Vector2(145, 170)
 	add_child(board)
 	interactables.append(board)
@@ -56,7 +56,7 @@ func _build_interactables() -> void:
 	desk.kind = "research_desk"
 	desk.display_name = "Research Desk"
 	desk.body_text = "Process the latest dive results into essence."
-	desk.accent_color = Color(0.55, 0.72, 0.5)
+	desk.accent_color = _get_interactable_accent("research_desk")
 	desk.position = Vector2(300, 145)
 	add_child(desk)
 	interactables.append(desk)
@@ -65,7 +65,7 @@ func _build_interactables() -> void:
 	shelf.kind = "archive_shelf"
 	shelf.display_name = "Archive Shelf"
 	shelf.body_text = "Arrange stations and archive items to tune the library."
-	shelf.accent_color = Color(0.42, 0.58, 0.74)
+	shelf.accent_color = _get_interactable_accent("archive_shelf")
 	shelf.position = Vector2(460, 150)
 	add_child(shelf)
 	interactables.append(shelf)
@@ -74,7 +74,7 @@ func _build_interactables() -> void:
 	entrance.kind = "dungeon_entrance"
 	entrance.display_name = "Dungeon Entrance"
 	entrance.body_text = "Begin the current dive."
-	entrance.accent_color = Color(0.58, 0.38, 0.7)
+	entrance.accent_color = _get_interactable_accent("dungeon_entrance")
 	entrance.position = Vector2(610, 230)
 	add_child(entrance)
 	interactables.append(entrance)
@@ -137,9 +137,18 @@ func _handle_interaction(focused) -> void:
 		if app_state.get_active_request_id() == "":
 			hud.show_detail("No Request", "There is no active patron request to dive for.")
 			return
-		var dive_text := "A short descent will search for the requested tome.\n\n%s" % app_state.get_active_deck_brief_text()
+		var theme_text: String = app_state.get_dungeon_theme_preview_text(app_state.get_active_request_id())
+		if not app_state.get_show_tooltips_enabled():
+			theme_text = "Dungeon theme: %s" % app_state.get_dungeon_theme_name(app_state.get_active_request_id())
+		var dive_text := "A short descent will search for the requested tome.\n\n%s\n\n%s" % [
+			theme_text,
+			app_state.get_active_deck_brief_text(),
+		]
 		if app_state.has_pending_research_job():
-			dive_text = "A research job is waiting, but the active request can still be dived.\n\n%s" % app_state.get_active_deck_brief_text()
+			dive_text = "A research job is waiting, but the active request can still be dived.\n\n%s\n\n%s" % [
+				theme_text,
+				app_state.get_active_deck_brief_text(),
+			]
 		hud.show_detail("Begin Dive", dive_text + "\n\nSelect a curse preview before confirming the dive.")
 		hud.open_pre_dive_panel(app_state.get_active_request_id())
 
@@ -210,7 +219,35 @@ func _build_archive_text() -> String:
 func _draw() -> void:
 	draw_rect(Rect2(Vector2.ZERO, Vector2(720, 420)), Color(0.12, 0.1, 0.13), true)
 	draw_rect(Rect2(Vector2.ZERO, Vector2(720, 420)), Color(0.4, 0.34, 0.25), false, 3.0)
-	draw_rect(Rect2(92, 128, 96, 84), Color(0.62, 0.5, 0.28), true)
-	draw_rect(Rect2(250, 118, 92, 84), Color(0.38, 0.64, 0.44), true)
-	draw_rect(Rect2(408, 110, 108, 96), Color(0.34, 0.44, 0.66), true)
-	draw_rect(Rect2(560, 190, 106, 84), Color(0.48, 0.34, 0.66), true)
+	draw_rect(Rect2(92, 128, 96, 84), _get_interactable_accent("request_board"), true)
+	draw_rect(Rect2(250, 118, 92, 84), _get_interactable_accent("research_desk"), true)
+	draw_rect(Rect2(408, 110, 108, 96), _get_interactable_accent("archive_shelf"), true)
+	draw_rect(Rect2(560, 190, 106, 84), _get_interactable_accent("dungeon_entrance"), true)
+
+func _get_interactable_accent(kind: String) -> Color:
+	var palette_mode := "default"
+	if app_state != null and app_state.has_method("get_palette_mode"):
+		palette_mode = app_state.get_palette_mode()
+	if palette_mode == "accessible":
+		match kind:
+			"request_board":
+				return Color(0.92, 0.82, 0.35)
+			"research_desk":
+				return Color(0.34, 0.82, 0.78)
+			"archive_shelf":
+				return Color(0.95, 0.64, 0.28)
+			"dungeon_entrance":
+				return Color(0.76, 0.46, 0.92)
+			_:
+				return Color(0.86, 0.86, 0.86)
+	match kind:
+		"request_board":
+			return Color(0.8, 0.67, 0.42)
+		"research_desk":
+			return Color(0.55, 0.72, 0.5)
+		"archive_shelf":
+			return Color(0.42, 0.58, 0.74)
+		"dungeon_entrance":
+			return Color(0.58, 0.38, 0.7)
+		_:
+			return Color(0.7, 0.7, 0.8)

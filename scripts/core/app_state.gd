@@ -16,6 +16,58 @@ const ARCHIVE_GRID_ROWS := 2
 const ARCHIVE_SLOT_COUNT := ARCHIVE_GRID_COLUMNS * ARCHIVE_GRID_ROWS
 const REQUEST_QUEUE_SIZE := 3
 const RESEARCH_TURNS_BASE := 2
+const DECK_SORT_MODES := ["manual", "role", "name", "cost"]
+const ARCHIVE_FILTER_MODES := ["all", "tomes", "relics", "placed", "unplaced"]
+const TEXT_SCALE_OPTIONS := [0.9, 1.0, 1.15, 1.3]
+const CONTRAST_MODES := ["normal", "high"]
+const PALETTE_MODES := ["default", "accessible"]
+const NARRATIVE_BEAT_ORDER := [
+	"first_request_complete",
+	"first_faction_milestone",
+	"first_wing_upgrade",
+	"first_curse_clear",
+	"first_request_chain",
+	"first_defense_event",
+	"first_meta_unlock",
+]
+const NARRATIVE_BEAT_DEFINITIONS := {
+	"first_request_complete": {
+		"name": "First Patron Satisfied",
+		"description": "A first request is completed and the archive starts to feel alive.",
+		"trigger_record_types": ["request_completion"],
+	},
+	"first_faction_milestone": {
+		"name": "First Faction Milestone",
+		"description": "A patron faction notices the archive's progress.",
+		"trigger_record_types": ["faction_milestone"],
+	},
+	"first_wing_upgrade": {
+		"name": "First Wing Specialization",
+		"description": "The library commits to a stronger archive wing path.",
+		"trigger_record_types": ["wing_upgrade"],
+	},
+	"first_curse_clear": {
+		"name": "First Curse Cleared",
+		"description": "The library survives a run shaped by an optional challenge.",
+		"trigger_record_types": ["curse_clear"],
+	},
+	"first_request_chain": {
+		"name": "First Request Chain",
+		"description": "A related sequence of patron requests is completed.",
+		"trigger_record_types": ["request_chain", "recorded_request_chain"],
+	},
+	"first_defense_event": {
+		"name": "First Defense Event",
+		"description": "The archive endures its first direct pressure event.",
+		"trigger_record_types": ["pressure_response", "pressure_failure"],
+		"trigger_pressure_event_ids": ["archive_breach", "shelf_shift", "relic_drift", "queue_clog", "station_stutter", "visitor_rush"],
+	},
+	"first_meta_unlock": {
+		"name": "First Meta Unlock",
+		"description": "Long-term archive planning begins to reshape the library.",
+		"trigger_record_types": ["meta_unlock"],
+	},
+}
 
 const STATION_LAYOUTS := {
 	"balanced": {
@@ -297,6 +349,7 @@ func initialize() -> void:
 	_normalize_archive_state()
 	_normalize_card_state()
 	_normalize_progression_state()
+	_normalize_pressure_state()
 	_save()
 
 func ensure_input_actions() -> void:
@@ -358,6 +411,485 @@ func get_active_request_reward_text() -> String:
 	if request == null:
 		return ""
 	return request.reward_text
+
+func get_dungeon_theme_preview_data(request_id: String = "") -> Dictionary:
+	if request_id == "":
+		request_id = get_active_request_id()
+	if content_db == null:
+		return {}
+	return content_db.get_dungeon_theme_preview_data(request_id)
+
+func get_dungeon_theme_preview_text(request_id: String = "") -> String:
+	if request_id == "":
+		request_id = get_active_request_id()
+	if content_db == null:
+		return "Dungeon theme: Wardline Vault"
+	return content_db.get_dungeon_theme_preview_text(request_id)
+
+func get_dungeon_theme_name(request_id: String = "") -> String:
+	var data := get_dungeon_theme_preview_data(request_id)
+	if data.is_empty():
+		return "Wardline Vault"
+	return str(data.get("name", "Wardline Vault"))
+
+func get_text_scale() -> float:
+	var settings: Dictionary = _get_ui_settings()
+	var scale: float = float(settings.get("text_scale", 1.0))
+	if scale <= 0.0:
+		return 1.0
+	return scale
+
+func get_text_scale_label() -> String:
+	return "%d%%" % int(round(get_text_scale() * 100.0))
+
+func set_text_scale(scale: float) -> bool:
+	var normalized: float = 1.0
+	var closest_delta: float = INF
+	for option in TEXT_SCALE_OPTIONS:
+		var candidate: float = float(option)
+		var delta: float = abs(candidate - scale)
+		if delta < closest_delta:
+			closest_delta = delta
+			normalized = candidate
+	var settings: Dictionary = _get_ui_settings()
+	if float(settings.get("text_scale", 1.0)) == normalized:
+		return false
+	settings["text_scale"] = normalized
+	_commit_ui_settings(settings)
+	return true
+
+func cycle_text_scale() -> float:
+	var current: float = get_text_scale()
+	var index: int = TEXT_SCALE_OPTIONS.find(current)
+	if index < 0:
+		index = 0
+	var next_scale: float = float(TEXT_SCALE_OPTIONS[(index + 1) % TEXT_SCALE_OPTIONS.size()])
+	set_text_scale(next_scale)
+	return next_scale
+
+func get_contrast_mode() -> String:
+	var settings: Dictionary = _get_ui_settings()
+	var mode: String = str(settings.get("contrast_mode", "normal"))
+	if not CONTRAST_MODES.has(mode):
+		return "normal"
+	return mode
+
+func get_contrast_mode_label() -> String:
+	match get_contrast_mode():
+		"high":
+			return "High"
+		_:
+			return "Normal"
+
+func cycle_contrast_mode() -> String:
+	var mode: String = get_contrast_mode()
+	var index: int = CONTRAST_MODES.find(mode)
+	if index < 0:
+		index = 0
+	var next_mode: String = CONTRAST_MODES[(index + 1) % CONTRAST_MODES.size()]
+	var settings: Dictionary = _get_ui_settings()
+	settings["contrast_mode"] = next_mode
+	_commit_ui_settings(settings)
+	return next_mode
+
+func get_palette_mode() -> String:
+	var settings: Dictionary = _get_ui_settings()
+	var mode: String = str(settings.get("palette_mode", "default"))
+	if not PALETTE_MODES.has(mode):
+		return "default"
+	return mode
+
+func get_palette_mode_label() -> String:
+	match get_palette_mode():
+		"accessible":
+			return "Accessible"
+		_:
+			return "Standard"
+
+func cycle_palette_mode() -> String:
+	var mode: String = get_palette_mode()
+	var index: int = PALETTE_MODES.find(mode)
+	if index < 0:
+		index = 0
+	var next_mode: String = PALETTE_MODES[(index + 1) % PALETTE_MODES.size()]
+	var settings: Dictionary = _get_ui_settings()
+	settings["palette_mode"] = next_mode
+	_commit_ui_settings(settings)
+	return next_mode
+
+func get_accessibility_summary_text() -> String:
+	var lines: Array[String] = []
+	lines.append("Accessibility:")
+	lines.append("Text scale: %s" % get_text_scale_label())
+	lines.append("Contrast: %s" % get_contrast_mode_label())
+	lines.append("Palette: %s" % get_palette_mode_label())
+	return "\n".join(lines)
+
+func get_show_tooltips_enabled() -> bool:
+	var settings: Dictionary = _get_ui_settings()
+	return bool(settings.get("show_tooltips", true))
+
+func set_show_tooltips_enabled(enabled: bool) -> void:
+	var settings: Dictionary = _get_ui_settings()
+	if bool(settings.get("show_tooltips", true)) == enabled:
+		return
+	settings["show_tooltips"] = enabled
+	_commit_ui_settings(settings)
+
+func toggle_show_tooltips() -> bool:
+	var enabled := not get_show_tooltips_enabled()
+	set_show_tooltips_enabled(enabled)
+	return enabled
+
+func get_deck_sort_mode() -> String:
+	var settings: Dictionary = _get_ui_settings()
+	var mode := str(settings.get("deck_sort_mode", "manual"))
+	if not DECK_SORT_MODES.has(mode):
+		return "manual"
+	return mode
+
+func get_deck_sort_mode_label() -> String:
+	match get_deck_sort_mode():
+		"role":
+			return "Role"
+		"name":
+			return "Name"
+		"cost":
+			return "Cost"
+		_:
+			return "Manual"
+
+func cycle_deck_sort_mode() -> String:
+	var mode := get_deck_sort_mode()
+	var index := DECK_SORT_MODES.find(mode)
+	if index < 0:
+		index = 0
+	var next_mode: String = DECK_SORT_MODES[(index + 1) % DECK_SORT_MODES.size()]
+	sort_active_deck(next_mode)
+	var settings: Dictionary = _get_ui_settings()
+	settings["deck_sort_mode"] = next_mode
+	_commit_ui_settings(settings)
+	return next_mode
+
+func sort_active_deck(sort_mode: String = "") -> bool:
+	var mode := sort_mode if sort_mode != "" else get_deck_sort_mode()
+	if not DECK_SORT_MODES.has(mode):
+		mode = "manual"
+	var deck_ids := get_active_deck_ids()
+	if deck_ids.is_empty():
+		return true
+	if mode == "manual":
+		return true
+
+	var entries: Array[Dictionary] = []
+	for index in range(deck_ids.size()):
+		var card_id := str(deck_ids[index])
+		var card = content_db.get_card(card_id)
+		if card == null:
+			continue
+		entries.append({
+			"card_id": card_id,
+			"name": str(card.name),
+			"role": str(card.role),
+			"cost": int(card.cost),
+			"original_index": index,
+		})
+
+	for i in range(entries.size()):
+		for j in range(i + 1, entries.size()):
+			if _should_swap_deck_entries(entries[i], entries[j], mode):
+				var temp: Dictionary = entries[i]
+				entries[i] = entries[j]
+				entries[j] = temp
+
+	var sorted_ids: Array[String] = []
+	for entry in entries:
+		sorted_ids.append(str(entry.get("card_id", "")))
+	if sorted_ids.is_empty():
+		return false
+	return set_active_deck(sorted_ids)
+
+func get_archive_filter_mode() -> String:
+	var settings: Dictionary = _get_ui_settings()
+	var mode := str(settings.get("archive_filter_mode", "all"))
+	if not ARCHIVE_FILTER_MODES.has(mode):
+		return "all"
+	return mode
+
+func get_archive_filter_mode_label() -> String:
+	match get_archive_filter_mode():
+		"tomes":
+			return "Tomes"
+		"relics":
+			return "Relics"
+		"placed":
+			return "Placed"
+		"unplaced":
+			return "Unplaced"
+		_:
+			return "All"
+
+func cycle_archive_filter_mode() -> String:
+	var mode := get_archive_filter_mode()
+	var index := ARCHIVE_FILTER_MODES.find(mode)
+	if index < 0:
+		index = 0
+	var next_mode: String = ARCHIVE_FILTER_MODES[(index + 1) % ARCHIVE_FILTER_MODES.size()]
+	var settings: Dictionary = _get_ui_settings()
+	settings["archive_filter_mode"] = next_mode
+	_commit_ui_settings(settings)
+	return next_mode
+
+func get_tracked_request_id() -> String:
+	var settings: Dictionary = _get_ui_settings()
+	var request_id := str(settings.get("tracked_request_id", ""))
+	if request_id != "" and content_db.get_request(request_id) == null:
+		return ""
+	return request_id
+
+func set_tracked_request_id(request_id: String) -> bool:
+	if request_id != "" and content_db.get_request(request_id) == null:
+		return false
+	var settings: Dictionary = _get_ui_settings()
+	if str(settings.get("tracked_request_id", "")) == request_id:
+		return true
+	settings["tracked_request_id"] = request_id
+	_commit_ui_settings(settings)
+	return true
+
+func clear_tracked_request() -> bool:
+	return set_tracked_request_id("")
+
+func track_active_request() -> bool:
+	return set_tracked_request_id(get_active_request_id())
+
+func track_next_request() -> bool:
+	var current_id: String = get_tracked_request_id()
+	if current_id == "":
+		current_id = get_active_request_id()
+	var next_id: String = content_db.get_next_request_id(
+		current_id,
+		_copy_string_array(save_data.get("completed_request_ids", []))
+	)
+	if next_id == "":
+		return false
+	return set_tracked_request_id(next_id)
+
+func get_tracked_request_text() -> String:
+	var request_id := get_tracked_request_id()
+	if request_id == "":
+		return "Tracked request: none."
+	var request = content_db.get_request(request_id)
+	if request == null:
+		return "Tracked request: none."
+	var entry: Dictionary = get_request_entry(request_id)
+	var state := str(entry.get("state", "tracked"))
+	var deadline_kind := str(entry.get("deadline_kind", "dive"))
+	var deadline_remaining := int(entry.get("deadline_turns_remaining", 0))
+	var lines: Array[String] = []
+	lines.append("Tracked request: %s" % str(request.name))
+	lines.append(_shorten_text(str(request.objective_text), 120))
+	lines.append("State: %s | Deadline: %d %s turns" % [state, deadline_remaining, deadline_kind])
+	return "\n".join(lines)
+
+func _get_ui_settings() -> Dictionary:
+	var settings: Dictionary = save_data.get("settings", {})
+	if typeof(settings) != TYPE_DICTIONARY:
+		return {}
+	return settings.duplicate(true)
+
+func _commit_ui_settings(settings: Dictionary) -> void:
+	var current_settings: Dictionary = _get_ui_settings()
+	if current_settings == settings:
+		return
+	save_data["settings"] = settings.duplicate(true)
+	save_changed.emit()
+	_save()
+
+func _shorten_text(text: String, max_chars: int) -> String:
+	var clean := text.replace("\n", " ").strip_edges()
+	if clean.length() <= max_chars:
+		return clean
+	return clean.substr(0, max_chars - 1).strip_edges() + "…"
+
+func _role_sort_rank(role: String) -> int:
+	match role:
+		"movement":
+			return 0
+		"offense":
+			return 1
+		"defense":
+			return 2
+		"utility":
+			return 3
+		_:
+			return 4
+
+func _should_swap_deck_entries(left: Dictionary, right: Dictionary, mode: String) -> bool:
+	var left_name := str(left.get("name", ""))
+	var right_name := str(right.get("name", ""))
+	var left_role := str(left.get("role", ""))
+	var right_role := str(right.get("role", ""))
+	var left_cost := int(left.get("cost", 0))
+	var right_cost := int(right.get("cost", 0))
+	match mode:
+		"role":
+			var left_rank := _role_sort_rank(left_role)
+			var right_rank := _role_sort_rank(right_role)
+			if left_rank != right_rank:
+				return left_rank > right_rank
+			if left_name.to_lower() != right_name.to_lower():
+				return left_name.to_lower() > right_name.to_lower()
+		"name":
+			if left_name.to_lower() != right_name.to_lower():
+				return left_name.to_lower() > right_name.to_lower()
+			if left_cost != right_cost:
+				return left_cost > right_cost
+		"cost":
+			if left_cost != right_cost:
+				return left_cost > right_cost
+			if left_name.to_lower() != right_name.to_lower():
+				return left_name.to_lower() > right_name.to_lower()
+		_:
+			return false
+	var left_index := int(left.get("original_index", 0))
+	var right_index := int(right.get("original_index", 0))
+	return left_index > right_index
+
+func _archive_inventory_entry_matches_filter(entry: Dictionary, mode: String) -> bool:
+	match mode:
+		"tomes":
+			return str(entry.get("item_type", "")) == "tome"
+		"relics":
+			return str(entry.get("item_type", "")) == "relic"
+		"placed":
+			return bool(entry.get("placed", false))
+		"unplaced":
+			return not bool(entry.get("placed", false))
+		_:
+			return true
+
+func _should_swap_inventory_entries(left: Dictionary, right: Dictionary) -> bool:
+	var left_type_rank := 0 if str(left.get("item_type", "")) == "tome" else 1
+	var right_type_rank := 0 if str(right.get("item_type", "")) == "tome" else 1
+	if left_type_rank != right_type_rank:
+		return left_type_rank > right_type_rank
+	var left_placed := bool(left.get("placed", false))
+	var right_placed := bool(right.get("placed", false))
+	if left_placed != right_placed:
+		return not left_placed and right_placed
+	var left_name := str(left.get("name", "")).to_lower()
+	var right_name := str(right.get("name", "")).to_lower()
+	if left_name != right_name:
+		return left_name > right_name
+	return str(left.get("item_id", "")) > str(right.get("item_id", ""))
+
+func get_active_wing_name() -> String:
+	var wing_id := get_active_wing_id()
+	if wing_id == "":
+		return "None"
+	var wing_def := get_wing_definition(wing_id)
+	if wing_def.is_empty():
+		return wing_id
+	return str(wing_def.get("name", wing_id))
+
+func get_active_build_summary_text() -> String:
+	var role_counts: Dictionary = {
+		"movement": 0,
+		"offense": 0,
+		"defense": 0,
+		"utility": 0,
+	}
+	for entry in get_active_deck_entries():
+		var role := str(entry.get("role", ""))
+		if role_counts.has(role):
+			role_counts[role] = int(role_counts.get(role, 0)) + 1
+
+	var focus_role := "balanced"
+	var focus_count := -1
+	var weak_role := ""
+	var weak_count := 999
+	for role in role_counts.keys():
+		var count := int(role_counts[role])
+		if count > focus_count:
+			focus_count = count
+			focus_role = str(role)
+		if count < weak_count:
+			weak_count = count
+			weak_role = str(role)
+
+	var role_label := focus_role
+	if focus_count <= 0:
+		role_label = "unclassified"
+	elif focus_count > 1:
+		role_label = "%s-leaning" % role_label
+
+	var station_name := get_station_layout_text().split("\n", false, 2)[0]
+	var archive_bonus_count := get_active_archive_bonuses().size()
+	var lines: Array[String] = []
+	lines.append("Build summary:")
+	lines.append("Deck: %s (%d movement, %d offense, %d defense, %d utility)." % [
+		role_label,
+		int(role_counts.get("movement", 0)),
+		int(role_counts.get("offense", 0)),
+		int(role_counts.get("defense", 0)),
+		int(role_counts.get("utility", 0)),
+	])
+	if weak_role != "":
+		lines.append("Weakest role: %s." % weak_role)
+	lines.append("Wing: %s." % get_active_wing_name())
+	lines.append("Station: %s." % station_name)
+	lines.append("Archive bonuses: %d active." % archive_bonus_count)
+	return "\n".join(lines)
+
+func get_pressure_event() -> Dictionary:
+	return _duplicate_pressure_event(save_data.get("pressure_event", {}))
+
+func has_pending_pressure_event() -> bool:
+	return not get_pressure_event().is_empty()
+
+func get_pressure_event_name() -> String:
+	var event := get_pressure_event()
+	if event.is_empty():
+		return ""
+	var event_id: String = str(event.get("event_id", ""))
+	var event_data: Dictionary = content_db.get_pressure_event_runtime_data(event_id)
+	if event_data.is_empty():
+		return event_id
+	return str(event_data.get("name", event_id))
+
+func get_pressure_summary_text() -> String:
+	var event := get_pressure_event()
+	if event.is_empty():
+		return "Pressure: calm."
+	var event_id: String = str(event.get("event_id", ""))
+	var event_data: Dictionary = content_db.get_pressure_event_runtime_data(event_id)
+	if event_data.is_empty():
+		return "Pressure alert: %s" % event_id
+	var lines: Array[String] = []
+	var threat_kind := str(event_data.get("threat_kind", "pressure"))
+	var prefix := "Defense alert" if threat_kind == "attack" else "Pressure alert"
+	lines.append("%s: %s" % [prefix, str(event_data.get("name", event_id))])
+	lines.append(str(event_data.get("description", "")))
+	if event.has("turns_remaining"):
+		lines.append("Resolve in: %d turns" % max(0, int(event.get("turns_remaining", 0))))
+	var assets: Array = event_data.get("threat_assets", [])
+	if not assets.is_empty():
+		lines.append("Threatened assets: %s" % ", ".join(assets))
+	var options: Array = event_data.get("response_options", [])
+	if not options.is_empty():
+		var option_names: Array[String] = []
+		for option in options:
+			if typeof(option) != TYPE_DICTIONARY:
+				continue
+			var option_name := str(option.get("name", option.get("id", "")))
+			var essence_cost := int(option.get("essence_cost", 0))
+			if essence_cost > 0:
+				option_name += " (%d essence)" % essence_cost
+			option_names.append(option_name)
+		if not option_names.is_empty():
+			lines.append("Responses: %s" % "; ".join(option_names))
+	return "\n".join(lines)
 
 func get_essence() -> int:
 	return int(save_data.get("essence", 0))
@@ -978,6 +1510,31 @@ func get_replay_records_text(limit: int = 12) -> String:
 		lines.append("%s - %s" % [str(record.get("type", "record")), str(record.get("summary", ""))])
 	return "Archive records:\n- " + "\n- ".join(lines)
 
+func get_narrative_unlock_ids() -> Array[String]:
+	return _unique_string_array(_copy_string_array(save_data.get("narrative_unlock_ids", [])))
+
+func get_narrative_unlock_text(limit: int = 6) -> String:
+	var unlock_ids := get_narrative_unlock_ids()
+	if unlock_ids.is_empty():
+		return "No story beats unlocked yet."
+	var lines: Array[String] = []
+	var start_index: int = max(0, unlock_ids.size() - limit)
+	for index in range(start_index, unlock_ids.size()):
+		var beat_id := unlock_ids[index]
+		var beat := _get_narrative_beat_definition(beat_id)
+		if beat.is_empty():
+			continue
+		lines.append("%s - %s" % [str(beat.get("name", beat_id)), str(beat.get("description", ""))])
+	if lines.is_empty():
+		return "No story beats unlocked yet."
+	return "Story beats:\n- " + "\n- ".join(lines)
+
+func get_narrative_unlock_summary_text() -> String:
+	var unlock_ids := get_narrative_unlock_ids()
+	if unlock_ids.is_empty():
+		return "Story beats: none unlocked yet."
+	return "Story beats unlocked: %d" % unlock_ids.size()
+
 func record_replay_entry(record_type: String, title: String, summary: String, payload: Dictionary = {}, request_id: String = "") -> void:
 	if record_type == "":
 		return
@@ -990,9 +1547,12 @@ func record_replay_entry(record_type: String, title: String, summary: String, pa
 		"request_id": request_id if request_id != "" else get_active_request_id(),
 		"payload": payload.duplicate(true),
 	})
+	var unlocked_narrative := _unlock_narrative_beats_for_record(record_type, payload)
 	while records.size() > get_replay_record_capacity():
 		records.pop_front()
 	save_data["replay_records"] = records
+	if unlocked_narrative:
+		save_data["narrative_unlock_ids"] = get_narrative_unlock_ids()
 	progression_changed.emit()
 	save_changed.emit()
 	_save()
@@ -1006,6 +1566,10 @@ func get_progression_summary_text() -> String:
 	lines.append(get_selected_curse_summary_text())
 	lines.append("")
 	lines.append(get_meta_progression_text())
+	lines.append("")
+	lines.append(get_narrative_unlock_summary_text())
+	lines.append("")
+	lines.append(get_narrative_unlock_text())
 	lines.append("")
 	lines.append(get_replay_records_text())
 	return "\n".join(lines)
@@ -1080,8 +1644,66 @@ func set_station_layout(layout_id: String) -> bool:
 	_save()
 	return true
 
+func resolve_pressure_event(option_id: String) -> bool:
+	var event := get_pressure_event()
+	if event.is_empty():
+		return false
+	var event_id := str(event.get("event_id", ""))
+	if event_id == "":
+		return false
+	var event_data: Dictionary = content_db.get_pressure_event_runtime_data(event_id)
+	if event_data.is_empty():
+		return false
+
+	var chosen_option: Dictionary = {}
+	for option in event_data.get("response_options", []):
+		if typeof(option) != TYPE_DICTIONARY:
+			continue
+		if str(option.get("id", "")) == option_id:
+			chosen_option = option
+			break
+	if chosen_option.is_empty():
+		return false
+
+	var effect_type := str(chosen_option.get("effect_type", ""))
+	if not (effect_type in ["clear", "remove_archive_item", "delay_request", "set_station_layout"]):
+		return false
+
+	var essence_cost: int = max(0, int(chosen_option.get("essence_cost", 0)))
+	if essence_cost > 0 and get_essence() < essence_cost:
+		return false
+	if essence_cost > 0:
+		spend_essence(essence_cost)
+
+	match effect_type:
+		"clear":
+			pass
+		"remove_archive_item":
+			var item_type := str(chosen_option.get("item_type", ""))
+			_remove_first_archive_item_of_type(item_type)
+		"delay_request":
+			_delay_active_request(max(1, int(chosen_option.get("delay_turns", 1))))
+		"set_station_layout":
+			var layout_id := str(chosen_option.get("layout_id", "balanced"))
+			if STATION_LAYOUTS.has(layout_id):
+				save_data["station_layout_id"] = layout_id
+		_:
+			return false
+
+	save_data["pressure_event"] = {}
+	_unlock_narrative_beat("first_defense_event")
+	save_changed.emit()
+	_save()
+	return true
+
 func get_request_queue_entries() -> Array:
-	return _duplicate_request_queue(save_data.get("request_queue", []))
+	var tracked_request_id := get_tracked_request_id()
+	var queue := _duplicate_request_queue(save_data.get("request_queue", []))
+	for index in range(queue.size()):
+		var entry: Dictionary = queue[index]
+		entry["is_tracked"] = str(entry.get("request_id", "")) == tracked_request_id
+		queue[index] = entry
+	return queue
 
 func get_active_request_entry():
 	var queue := get_request_queue_entries()
@@ -1107,6 +1729,8 @@ func get_request_queue_text() -> String:
 		var request_id: String = str(entry.get("request_id", ""))
 		var request = content_db.get_request(request_id)
 		var title := str(request.name if request != null else request_id)
+		if bool(entry.get("is_tracked", false)):
+			title = "★ %s" % title
 		var state := str(entry.get("state", "queued"))
 		var deadline_kind := str(entry.get("deadline_kind", "dive"))
 		var deadline_remaining := int(entry.get("deadline_turns_remaining", 0))
@@ -1258,6 +1882,18 @@ func get_station_layout_effect_text() -> String:
 	return "%s\n%s" % [str(layout.get("name", "balanced")), str(layout.get("description", ""))]
 
 func advance_library_turn(turn_kind: String = "library") -> void:
+	save_data["library_turn_count"] = max(0, int(save_data.get("library_turn_count", 0)) + 1)
+	var pressure_failed := false
+	if has_pending_pressure_event():
+		var pressure_event: Dictionary = get_pressure_event()
+		var remaining_turns: int = int(pressure_event.get("turns_remaining", 1)) - 1
+		pressure_event["turns_remaining"] = remaining_turns
+		if remaining_turns <= 0:
+			_apply_pressure_event_failure(pressure_event)
+			save_data["pressure_event"] = {}
+			pressure_failed = true
+		else:
+			save_data["pressure_event"] = pressure_event
 	var queue := get_request_queue_entries()
 	if not queue.is_empty():
 		var active_entry: Dictionary = queue[0]
@@ -1279,8 +1915,10 @@ func advance_library_turn(turn_kind: String = "library") -> void:
 		else:
 			save_data["research_job"] = job
 
-		save_changed.emit()
-		_save()
+	if not pressure_failed:
+		_maybe_queue_pressure_event(turn_kind)
+	save_changed.emit()
+	_save()
 
 func advance_dive_turn() -> void:
 	advance_library_turn("dive")
@@ -1440,6 +2078,7 @@ func _complete_request_entry(entry: Dictionary, source: String = "") -> void:
 			save_data["unlocked_room_blueprint_ids"] = unlocked_rooms
 	grant_card_to_collection(str(request_data.get("reward_card_ids", []).front() if not request_data.get("reward_card_ids", []).is_empty() else ""))
 	_award_faction_reputation_for_request(request_data, source)
+	_apply_request_progression_rewards(request_data, request_id, source)
 	var active_request_id: String = _refill_request_queue_after_removal(queue)
 	save_data["request_queue"] = queue
 	save_data["active_request_id"] = active_request_id
@@ -1451,6 +2090,74 @@ func _complete_request_entry(entry: Dictionary, source: String = "") -> void:
 	_record_request_history(request_id, "completed", source)
 	save_changed.emit()
 	_save()
+
+func _apply_request_progression_rewards(request_data: Dictionary, request_id: String, source: String = "") -> void:
+	if request_data.is_empty():
+		return
+	var progression_rewards: Dictionary = request_data.get("progression_rewards", {})
+	if progression_rewards.is_empty():
+		return
+
+	for wing_id in _copy_string_array(progression_rewards.get("unlock_wing_ids", [])):
+		unlock_wing(wing_id, false)
+
+	if progression_rewards.has("wing_progression") and typeof(progression_rewards.get("wing_progression", {})) == TYPE_DICTIONARY:
+		for wing_id in progression_rewards.get("wing_progression", {}).keys():
+			_apply_wing_progression_reward(str(wing_id), int(progression_rewards.get("wing_progression", {}).get(wing_id, 0)))
+
+	for family_id in _copy_string_array(progression_rewards.get("unlock_curse_families", [])):
+		_unlock_curse_family(family_id)
+
+	for unlock_id in _copy_string_array(progression_rewards.get("meta_unlock_ids", [])):
+		var unlock_ids: Array[String] = _copy_string_array(save_data.get("meta_unlock_ids", []))
+		if not unlock_ids.has(unlock_id):
+			unlock_ids.append(unlock_id)
+			save_data["meta_unlock_ids"] = _unique_string_array(unlock_ids)
+
+	var record_kind := str(progression_rewards.get("record_kind", ""))
+	if record_kind != "":
+		var request_name := str(request_data.get("name", request_id))
+		record_replay_entry(
+			record_kind,
+			request_name,
+			str(request_data.get("archive_reward_text", "")),
+			{
+				"request_id": request_id,
+				"source": source,
+				"record_kind": record_kind,
+			},
+			request_id
+		)
+
+func _apply_wing_progression_reward(wing_id: String, target_tier: int) -> void:
+	var wing_def := get_wing_definition(wing_id)
+	if wing_def.is_empty():
+		return
+	var wings: Dictionary = save_data.get("wing_progression", {})
+	var wing_state := get_wing_progression_state(wing_id)
+	if wing_state.is_empty():
+		wing_state = {
+			"wing_id": wing_id,
+			"unlocked": true,
+			"tier": 0,
+			"purchased_upgrade_ids": [],
+		}
+	var upgrades: Array = wing_def.get("upgrades", [])
+	var tier: int = clamp(target_tier, 0, upgrades.size())
+	wing_state["unlocked"] = true
+	wing_state["tier"] = max(int(wing_state.get("tier", 0)), tier)
+	var purchased_ids := _copy_string_array(wing_state.get("purchased_upgrade_ids", []))
+	for index in range(min(tier, upgrades.size())):
+		var upgrade: Dictionary = upgrades[index]
+		var upgrade_id := str(upgrade.get("id", ""))
+		if upgrade_id != "" and not purchased_ids.has(upgrade_id):
+			purchased_ids.append(upgrade_id)
+	wing_state["purchased_upgrade_ids"] = purchased_ids
+	wings[wing_id] = wing_state
+	save_data["wing_progression"] = wings
+	if save_data.get("active_wing_id", "") == "" or not bool(get_wing_progression_state(str(save_data.get("active_wing_id", ""))).get("unlocked", false)):
+		save_data["active_wing_id"] = wing_id
+	progression_changed.emit()
 
 func get_archive_tomes() -> Array:
 	return save_data.get("archived_tome_ids", []).duplicate()
@@ -1474,27 +2181,41 @@ func get_owned_archive_item_ids(item_type: String) -> Array:
 		return get_archive_relics()
 	return []
 
-func get_archive_inventory() -> Array:
+func get_archive_inventory(filter_mode: String = "") -> Array:
+	var mode := filter_mode if filter_mode != "" else get_archive_filter_mode()
+	if not ARCHIVE_FILTER_MODES.has(mode):
+		mode = "all"
 	var inventory: Array = []
 	var slots := get_archive_slots()
 
 	for tome_id in get_archive_tomes():
-		inventory.append({
+		var tome_entry := {
 			"item_type": "tome",
 			"item_id": tome_id,
 			"name": _get_item_name("tome", tome_id),
 			"placed": _find_slot_index("tome", tome_id, slots) >= 0,
 			"slot_index": _find_slot_index("tome", tome_id, slots),
-		})
+		}
+		if _archive_inventory_entry_matches_filter(tome_entry, mode):
+			inventory.append(tome_entry)
 
 	for relic_id in get_archive_relics():
-		inventory.append({
+		var relic_entry := {
 			"item_type": "relic",
 			"item_id": relic_id,
 			"name": _get_item_name("relic", relic_id),
 			"placed": _find_slot_index("relic", relic_id, slots) >= 0,
 			"slot_index": _find_slot_index("relic", relic_id, slots),
-		})
+		}
+		if _archive_inventory_entry_matches_filter(relic_entry, mode):
+			inventory.append(relic_entry)
+
+	for i in range(inventory.size()):
+		for j in range(i + 1, inventory.size()):
+			if _should_swap_inventory_entries(inventory[i], inventory[j]):
+				var temp: Dictionary = inventory[i]
+				inventory[i] = inventory[j]
+				inventory[j] = temp
 
 	return inventory
 
@@ -1739,11 +2460,12 @@ func start_run():
 		return null
 	current_run = preload("res://scripts/core/run_state.gd").new()
 	current_run.request_id = get_active_request_id()
+	current_run.theme_id = content_db.get_dungeon_theme_id_for_request(current_run.request_id)
 	current_run.run_seed = int(Time.get_unix_time_from_system()) ^ int(Time.get_ticks_msec())
 	if not is_active_deck_valid():
 		_normalize_card_state()
 	current_run.deck_ids = get_active_deck_ids()
-	current_run.room_sequence = content_db.build_0_3_dungeon_layout(current_run.run_seed)
+	current_run.room_sequence = content_db.build_dungeon_layout(current_run.run_seed, current_run.request_id)
 	current_run.player_hp = 5
 	current_run.player_max_hp = 5
 	current_run.insight = 3
@@ -1802,6 +2524,7 @@ func finish_run(success: bool, tome_id: String = "", relic_id: String = "") -> v
 		current_run.replay_summary = {
 			"success": success,
 			"request_id": current_run.request_id,
+			"theme_id": current_run.theme_id,
 			"tome_id": tome_id,
 			"relic_id": relic_id,
 			"wing_id": current_run.active_wing_id,
@@ -1815,12 +2538,12 @@ func finish_run(success: bool, tome_id: String = "", relic_id: String = "") -> v
 			current_run.replay_summary,
 			current_run.request_id
 		)
+		current_run = null
 
 	advance_dive_turn()
 
 	clear_selected_curse_selection()
 	run_finished.emit(success, tome_id)
-	current_run = null
 	_save()
 
 func grant_tome(tome_id: String) -> void:
@@ -2105,6 +2828,128 @@ func _record_request_history(request_id: String, state: String, note: String = "
 	})
 	save_data["request_history"] = history
 
+func _duplicate_pressure_event(source_event: Dictionary) -> Dictionary:
+	if source_event.is_empty():
+		return {}
+	var event_id := str(source_event.get("event_id", ""))
+	if event_id == "" or content_db == null or content_db.get_pressure_event_runtime_data(event_id).is_empty():
+		return {}
+	var event_data: Dictionary = content_db.get_pressure_event_runtime_data(event_id)
+	var event := {
+		"event_id": event_id,
+		"source_request_id": str(source_event.get("source_request_id", "")),
+		"turn": max(0, int(source_event.get("turn", 0))),
+		"turns_remaining": max(1, int(source_event.get("turns_remaining", _get_pressure_event_duration(event_data)))),
+	}
+	return event
+
+func _maybe_queue_pressure_event(turn_kind: String) -> void:
+	if turn_kind == "dive" and current_run != null:
+		return
+	if has_pending_pressure_event():
+		return
+	var turn_index := int(save_data.get("library_turn_count", 0))
+	if turn_index < 3 or turn_index % 3 != 0:
+		return
+	var request_id := get_active_request_id()
+	var event_id: String = content_db.get_pressure_event_id_for_request(request_id, turn_index)
+	if event_id == "":
+		return
+	var event_data: Dictionary = content_db.get_pressure_event_runtime_data(event_id)
+	save_data["pressure_event"] = {
+		"event_id": event_id,
+		"source_request_id": request_id,
+		"turn": turn_index,
+		"turns_remaining": _get_pressure_event_duration(event_data),
+	}
+
+func _get_pressure_event_duration(event_data: Dictionary) -> int:
+	if event_data.is_empty():
+		return 2
+	var threat_kind := str(event_data.get("threat_kind", "pressure"))
+	if threat_kind == "attack":
+		return 1
+	return 2
+
+func _apply_pressure_event_failure(event: Dictionary) -> void:
+	if event.is_empty():
+		return
+	var event_id := str(event.get("event_id", ""))
+	match event_id:
+		"archive_breach":
+			if not _remove_first_archive_item_of_type("tome"):
+				_remove_first_archive_item_of_type("relic")
+			if get_essence() > 0:
+				spend_essence(1)
+		"shelf_shift":
+			if not _remove_first_archive_item_of_type("tome"):
+				_remove_first_archive_item_of_type("relic")
+		"relic_drift":
+			_remove_first_archive_item_of_type("relic")
+		"queue_clog":
+			_delay_active_request(1)
+		"station_stutter":
+			save_data["station_layout_id"] = "balanced"
+		"visitor_rush":
+			_delay_active_request(1)
+			if get_essence() > 0:
+				spend_essence(1)
+	_unlock_narrative_beat("first_defense_event")
+	save_changed.emit()
+	_save()
+
+func _get_narrative_beat_definition(beat_id: String) -> Dictionary:
+	var beat: Dictionary = NARRATIVE_BEAT_DEFINITIONS.get(beat_id, {})
+	if beat.is_empty():
+		return {}
+	return beat.duplicate(true)
+
+func _unlock_narrative_beat(beat_id: String) -> bool:
+	if beat_id == "":
+		return false
+	if _get_narrative_beat_definition(beat_id).is_empty():
+		return false
+	var unlock_ids: Array[String] = get_narrative_unlock_ids()
+	if unlock_ids.has(beat_id):
+		return false
+	unlock_ids.append(beat_id)
+	save_data["narrative_unlock_ids"] = _unique_string_array(unlock_ids)
+	return true
+
+func _unlock_narrative_beats_for_record(record_type: String, _payload: Dictionary = {}) -> bool:
+	var changed := false
+	for beat_id in NARRATIVE_BEAT_ORDER:
+		var beat: Dictionary = _get_narrative_beat_definition(beat_id)
+		if beat.is_empty():
+			continue
+		var trigger_types: Array = beat.get("trigger_record_types", [])
+		if trigger_types.has(record_type):
+			changed = _unlock_narrative_beat(beat_id) or changed
+	return changed
+
+func _remove_first_archive_item_of_type(item_type: String) -> bool:
+	if item_type == "":
+		return false
+	var slots := get_archive_slots()
+	for slot_index in range(slots.size()):
+		var slot: Dictionary = slots[slot_index]
+		if str(slot.get("item_type", "")) == item_type and str(slot.get("item_id", "")) != "":
+			return remove_archive_item(slot_index)
+	return false
+
+func _delay_active_request(turns: int) -> bool:
+	if turns <= 0:
+		return false
+	var queue := get_request_queue_entries()
+	if queue.is_empty():
+		return false
+	var entry: Dictionary = queue[0]
+	entry["deadline_turns_remaining"] = max(0, int(entry.get("deadline_turns_remaining", 0)) + turns)
+	entry["deadline_turns_total"] = max(0, int(entry.get("deadline_turns_total", 0)) + turns)
+	queue[0] = entry
+	save_data["request_queue"] = queue
+	return true
+
 func _make_empty_archive_slots() -> Array:
 	var slots: Array = []
 	for _i in range(ARCHIVE_SLOT_COUNT):
@@ -2168,8 +3013,15 @@ func _get_item_name(item_type: String, item_id: String) -> String:
 	return item_id
 
 func _save() -> void:
-	save_manager.save_save(save_data)
-	save_changed.emit()
+	save_now()
+
+func save_now() -> bool:
+	if save_manager == null:
+		return false
+	var saved: bool = save_manager.save_save(save_data)
+	if saved:
+		save_changed.emit()
+	return saved
 
 func _normalize_essence_state() -> void:
 	save_data["essence"] = max(0, int(save_data.get("essence", 0)))
@@ -2274,6 +3126,9 @@ func _normalize_progression_state() -> void:
 	while records.size() > get_replay_record_capacity():
 		records.pop_front()
 	save_data["replay_records"] = records
+
+func _normalize_pressure_state() -> void:
+	save_data["pressure_event"] = _duplicate_pressure_event(save_data.get("pressure_event", {}))
 
 func _normalize_request_state() -> void:
 	var queue := _duplicate_request_queue(save_data.get("request_queue", []))

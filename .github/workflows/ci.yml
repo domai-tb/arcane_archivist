@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Godot
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y godot4 || sudo apt-get install -y godot
+
+      - name: Parse core scripts
+        run: |
+          GODOT_BIN="$(command -v godot4 || command -v godot)"
+          "${GODOT_BIN}" --headless --path . --check-only --script res://scripts/core/app_state.gd
+          "${GODOT_BIN}" --headless --path . --check-only --script res://scripts/core/content_db.gd
+          "${GODOT_BIN}" --headless --path . --check-only --script res://tests/test_release_gate.gd
+
+      - name: Launch smoke test
+        run: |
+          GODOT_BIN="$(command -v godot4 || command -v godot)"
+          "${GODOT_BIN}" --headless --path . --quit-after 3

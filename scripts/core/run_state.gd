@@ -2,6 +2,7 @@ extends RefCounted
 class_name RunState
 
 var request_id: String = ""
+var theme_id: String = ""
 var run_seed: int = 0
 var room_sequence: Array = []
 var current_room_index: int = 0
@@ -35,6 +36,7 @@ var run_modifiers: Array[Dictionary] = []
 func to_dict() -> Dictionary:
 	return {
 		"request_id": request_id,
+		"theme_id": theme_id,
 		"seed": run_seed,
 		"room_sequence": room_sequence,
 		"current_room_index": current_room_index,
@@ -68,6 +70,7 @@ func to_dict() -> Dictionary:
 
 func from_dict(data: Dictionary) -> void:
 	request_id = data.get("request_id", "")
+	theme_id = str(data.get("theme_id", ""))
 	run_seed = int(data.get("seed", 0))
 	room_sequence = data.get("room_sequence", [])
 	current_room_index = int(data.get("current_room_index", 0))

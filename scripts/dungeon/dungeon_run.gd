@@ -50,10 +50,12 @@ func _build_scene() -> void:
 
 	hud = preload("res://scenes/ui/DiveHud.tscn").instantiate()
 	add_child(hud)
-	hud.setup(player)
+	hud.setup(player, app_state)
 	hud.card_selected.connect(_on_card_selected)
 	hud.set_active_bonuses_text(app_state.get_active_run_bonus_text())
+	hud.set_build_text(app_state.get_active_build_summary_text())
 	hud.set_deck_text(app_state.get_active_deck_brief_text())
+	_refresh_controls_label()
 
 	_sync_player_to_room(0)
 	_refresh_hud("The dive begins.")
@@ -88,10 +90,11 @@ func _process(_delta: float) -> void:
 		run_state.room_cleared = true
 
 	if hud != null:
-		hud.set_room_title(room.room_title)
+		hud.set_room_title("%s: %s" % [app_state.get_dungeon_theme_name(run_state.request_id), room.room_title])
 		hud.set_stats_text(room.get_stats_text())
 		hud.set_prompt_text(room.get_prompt_text())
 		hud.set_active_bonuses_text(app_state.get_active_run_bonus_text())
+		hud.set_build_text(app_state.get_active_build_summary_text())
 
 func _unhandled_input(event: InputEvent) -> void:
 	if player == null or run_state == null:
@@ -223,7 +226,7 @@ func _refresh_hud(message: String) -> void:
 
 	var room = _get_current_room()
 	if room != null:
-		hud.set_room_title(room.room_title)
+		hud.set_room_title("%s: %s" % [app_state.get_dungeon_theme_name(run_state.request_id), room.room_title])
 		hud.set_stats_text(room.get_stats_text())
 		hud.set_prompt_text(room.get_prompt_text())
 	else:
@@ -232,7 +235,17 @@ func _refresh_hud(message: String) -> void:
 		hud.set_prompt_text("")
 	hud.set_message(message)
 	hud.set_active_bonuses_text(app_state.get_active_run_bonus_text())
+	hud.set_build_text(app_state.get_active_build_summary_text())
 	hud.set_deck_text(app_state.get_active_deck_brief_text())
+	_refresh_controls_label()
+
+func _refresh_controls_label() -> void:
+	if hud == null or app_state == null:
+		return
+	if app_state.get_show_tooltips_enabled():
+		hud.set_controls_text("Move with WASD. Use 1-5 for cards. Press E to interact.")
+	else:
+		hud.set_controls_text("WASD move. 1-5 cards. E interact.")
 
 func _finish_run(success: bool, tome_id: String) -> void:
 	var main_scene = get_tree().current_scene

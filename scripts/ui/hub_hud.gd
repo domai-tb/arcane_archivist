@@ -13,8 +13,11 @@ var content_db = null
 var request_label: Label
 var essence_label: Label
 var request_queue_label: Label
+var tracked_request_label: Label
 var research_label: Label
 var station_label: Label
+var build_summary_label: Label
+var pressure_label: Label
 var controls_label: Label
 var selected_item_label: Label
 var prompt_label: Label
@@ -51,6 +54,10 @@ var progression_summary_label: Label
 var progression_grid: GridContainer
 var progression_detail_label: Label
 var progression_buttons: Array = []
+var pressure_summary_label: Label
+var pressure_detail_label: Label
+var pressure_button_box: VBoxContainer
+var pressure_response_buttons: Array = []
 var curses_summary_label: Label
 var curse_grid: GridContainer
 var curse_detail_label: Label
@@ -58,6 +65,16 @@ var curse_buttons: Array = []
 var records_summary_label: Label
 var records_grid: VBoxContainer
 var copy_records_button: Button
+var guidance_button: Button
+var text_scale_button: Button
+var contrast_button: Button
+var palette_button: Button
+var deck_sort_button: Button
+var archive_filter_button: Button
+var track_active_button: Button
+var track_next_button: Button
+var clear_track_button: Button
+var accessibility_label: Label
 var upgrade_summary_label: Label
 var upgrade_grid: GridContainer
 var upgrade_detail_label: Label
@@ -65,17 +82,28 @@ var apply_upgrade_button: Button
 var upgrade_buttons: Array = []
 var pre_dive_panel: PanelContainer
 var pre_dive_request_label: Label
+var pre_dive_theme_label: Label
 var pre_dive_bonus_label: Label
 var pre_dive_curse_label: Label
 var pre_dive_detail_label: Label
 var pre_dive_curse_grid: GridContainer
 var pre_dive_confirm_button: Button
 var pre_dive_cancel_button: Button
+var touch_panel: PanelContainer
+var touch_button_box: GridContainer
+var touch_buttons: Dictionary = {}
+var top_row: HBoxContainer
+var info_panel: PanelContainer
+var pre_dive_outer: MarginContainer
+var pre_dive_button_row: HBoxContainer
+var pre_dive_restore_focus: Control
+var compact_layout: bool = false
 var selected_item_type: String = ""
 var selected_item_id: String = ""
 var selected_collection_card_id: String = ""
 var selected_deck_slot_index: int = -1
 var selected_reward_card_id: String = ""
+var ui_root: Control
 
 
 func setup(new_app_state, new_content_db) -> void:
@@ -92,7 +120,14 @@ func setup(new_app_state, new_content_db) -> void:
 
 func _ready() -> void:
 	_build_ui()
+	var viewport := get_viewport()
+	if viewport != null and not viewport.size_changed.is_connected(_on_viewport_size_changed):
+		viewport.size_changed.connect(_on_viewport_size_changed)
 	refresh_archive_panel()
+
+
+func _exit_tree() -> void:
+	_release_all_touch_actions()
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -120,14 +155,15 @@ func _build_ui() -> void:
 	stack.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	stack.add_theme_constant_override("separation", 12)
 	margin.add_child(stack)
+	ui_root = stack
 
-	var top_row := HBoxContainer.new()
+	top_row = HBoxContainer.new()
 	top_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	top_row.add_theme_constant_override("separation", 12)
 	stack.add_child(top_row)
 
-	var info_panel := PanelContainer.new()
+	info_panel = PanelContainer.new()
 	info_panel.custom_minimum_size = Vector2(INFO_PANEL_WIDTH, 0)
 	info_panel.size_flags_horizontal = 0
 	info_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -153,11 +189,39 @@ func _build_ui() -> void:
 	request_queue_label = _make_wrapped_label("Request queue unavailable.", 280)
 	info_box.add_child(request_queue_label)
 
+	tracked_request_label = _make_wrapped_label("Tracked request: none.", 280)
+	info_box.add_child(tracked_request_label)
+
+	var request_row := HBoxContainer.new()
+	request_row.add_theme_constant_override("separation", 6)
+	info_box.add_child(request_row)
+
+	track_active_button = Button.new()
+	track_active_button.text = "Track Active"
+	track_active_button.pressed.connect(_on_track_active_request_pressed)
+	request_row.add_child(track_active_button)
+
+	track_next_button = Button.new()
+	track_next_button.text = "Track Next"
+	track_next_button.pressed.connect(_on_track_next_request_pressed)
+	request_row.add_child(track_next_button)
+
+	clear_track_button = Button.new()
+	clear_track_button.text = "Clear Track"
+	clear_track_button.pressed.connect(_on_clear_tracked_request_pressed)
+	request_row.add_child(clear_track_button)
+
 	research_label = _make_wrapped_label("No research job waiting.", 280)
 	info_box.add_child(research_label)
 
 	station_label = _make_wrapped_label("Stations: Balanced Layout", 280)
 	info_box.add_child(station_label)
+
+	build_summary_label = _make_wrapped_label("Build summary unavailable.", 280)
+	info_box.add_child(build_summary_label)
+
+	pressure_label = _make_wrapped_label("Pressure: calm.", 280)
+	info_box.add_child(pressure_label)
 
 	var service_row := HBoxContainer.new()
 	service_row.add_theme_constant_override("separation", 8)
@@ -178,6 +242,26 @@ func _build_ui() -> void:
 	station_button.pressed.connect(_on_arrange_stations_pressed)
 	service_row.add_child(station_button)
 
+	guidance_button = Button.new()
+	guidance_button.text = "Guidance"
+	guidance_button.pressed.connect(_on_toggle_guidance_pressed)
+	service_row.add_child(guidance_button)
+
+	text_scale_button = Button.new()
+	text_scale_button.text = "Text Size"
+	text_scale_button.pressed.connect(_on_cycle_text_scale_pressed)
+	service_row.add_child(text_scale_button)
+
+	contrast_button = Button.new()
+	contrast_button.text = "Contrast"
+	contrast_button.pressed.connect(_on_cycle_contrast_pressed)
+	service_row.add_child(contrast_button)
+
+	palette_button = Button.new()
+	palette_button.text = "Palette"
+	palette_button.pressed.connect(_on_cycle_palette_pressed)
+	service_row.add_child(palette_button)
+
 	selected_item_label = _make_wrapped_label("Selected: none", 280)
 	info_box.add_child(selected_item_label)
 
@@ -186,6 +270,9 @@ func _build_ui() -> void:
 
 	message_label = _make_wrapped_label("", 280)
 	info_box.add_child(message_label)
+
+	accessibility_label = _make_wrapped_label("Accessibility unavailable.", 280)
+	info_box.add_child(accessibility_label)
 
 	var archive_panel := PanelContainer.new()
 	archive_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -206,6 +293,7 @@ func _build_ui() -> void:
 
 	_add_section_button(section_row, "archive", "Archive")
 	_add_section_button(section_row, "progression", "Progression")
+	_add_section_button(section_row, "pressure", "Pressure")
 	_add_section_button(section_row, "curses", "Curses")
 	_add_section_button(section_row, "records", "Records")
 	_add_section_button(section_row, "upgrades", "Upgrades")
@@ -247,6 +335,15 @@ func _build_ui() -> void:
 	inventory_title.text = "Owned Items"
 	archive_section.add_child(inventory_title)
 
+	var archive_control_row := HBoxContainer.new()
+	archive_control_row.add_theme_constant_override("separation", 6)
+	archive_section.add_child(archive_control_row)
+
+	archive_filter_button = Button.new()
+	archive_filter_button.text = "Archive Filter: All"
+	archive_filter_button.pressed.connect(_on_cycle_archive_filter_pressed)
+	archive_control_row.add_child(archive_filter_button)
+
 	inventory_grid = GridContainer.new()
 	inventory_grid.columns = 2
 	inventory_grid.add_theme_constant_override("h_separation", 8)
@@ -284,6 +381,26 @@ func _build_ui() -> void:
 
 	progression_detail_label = _make_wrapped_label("", 440)
 	progression_section.add_child(progression_detail_label)
+
+	var pressure_section := VBoxContainer.new()
+	pressure_section.visible = false
+	pressure_section.add_theme_constant_override("separation", 8)
+	section_stack.add_child(pressure_section)
+	section_panels["pressure"] = pressure_section
+
+	var pressure_title := Label.new()
+	pressure_title.text = "Pressure Response"
+	pressure_section.add_child(pressure_title)
+
+	pressure_summary_label = _make_wrapped_label("", 440)
+	pressure_section.add_child(pressure_summary_label)
+
+	pressure_detail_label = _make_wrapped_label("", 440)
+	pressure_section.add_child(pressure_detail_label)
+
+	pressure_button_box = VBoxContainer.new()
+	pressure_button_box.add_theme_constant_override("separation", 8)
+	pressure_section.add_child(pressure_button_box)
 
 	var curses_section := VBoxContainer.new()
 	curses_section.visible = false
@@ -371,6 +488,15 @@ func _build_ui() -> void:
 	deck_title.text = "Deck Lab"
 	deck_box.add_child(deck_title)
 
+	var deck_control_row := HBoxContainer.new()
+	deck_control_row.add_theme_constant_override("separation", 6)
+	deck_box.add_child(deck_control_row)
+
+	deck_sort_button = Button.new()
+	deck_sort_button.text = "Sort Deck: Manual"
+	deck_sort_button.pressed.connect(_on_sort_deck_pressed)
+	deck_control_row.add_child(deck_sort_button)
+
 	deck_label = _make_wrapped_label("", 760)
 	deck_box.add_child(deck_label)
 
@@ -450,13 +576,41 @@ func _build_ui() -> void:
 	detail_body.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	detail_box.add_child(detail_body)
 
+	touch_panel = PanelContainer.new()
+	touch_panel.visible = false
+	add_child(touch_panel)
+
+	var touch_box := VBoxContainer.new()
+	touch_box.add_theme_constant_override("separation", 6)
+	touch_panel.add_child(touch_box)
+
+	var touch_title := Label.new()
+	touch_title.text = "Touch Controls"
+	touch_box.add_child(touch_title)
+
+	touch_button_box = GridContainer.new()
+	touch_button_box.columns = 3
+	touch_button_box.add_theme_constant_override("h_separation", 6)
+	touch_button_box.add_theme_constant_override("v_separation", 6)
+	touch_box.add_child(touch_button_box)
+
+	_add_touch_button("", "")
+	_add_touch_button("Up", "move_up")
+	_add_touch_button("", "")
+	_add_touch_button("Left", "move_left")
+	_add_touch_button("Interact", "interact")
+	_add_touch_button("Right", "move_right")
+	_add_touch_button("", "")
+	_add_touch_button("Down", "move_down")
+	_add_touch_button("Cancel", "ui_cancel")
+
 	pre_dive_panel = PanelContainer.new()
 	pre_dive_panel.visible = false
 	pre_dive_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
 	pre_dive_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(pre_dive_panel)
 
-	var pre_dive_outer := MarginContainer.new()
+	pre_dive_outer = MarginContainer.new()
 	pre_dive_outer.set_anchors_preset(Control.PRESET_FULL_RECT)
 	pre_dive_outer.add_theme_constant_override("margin_left", 140)
 	pre_dive_outer.add_theme_constant_override("margin_top", 56)
@@ -475,6 +629,9 @@ func _build_ui() -> void:
 	pre_dive_request_label = _make_wrapped_label("", 0)
 	pre_dive_box.add_child(pre_dive_request_label)
 
+	pre_dive_theme_label = _make_wrapped_label("", 0)
+	pre_dive_box.add_child(pre_dive_theme_label)
+
 	pre_dive_bonus_label = _make_wrapped_label("", 0)
 	pre_dive_box.add_child(pre_dive_bonus_label)
 
@@ -490,7 +647,7 @@ func _build_ui() -> void:
 	pre_dive_detail_label = _make_wrapped_label("", 0)
 	pre_dive_box.add_child(pre_dive_detail_label)
 
-	var pre_dive_button_row := HBoxContainer.new()
+	pre_dive_button_row = HBoxContainer.new()
 	pre_dive_button_row.add_theme_constant_override("separation", 8)
 	pre_dive_box.add_child(pre_dive_button_row)
 
@@ -503,6 +660,7 @@ func _build_ui() -> void:
 	pre_dive_cancel_button.text = "Cancel"
 	pre_dive_cancel_button.pressed.connect(_on_pre_dive_cancel_pressed)
 	pre_dive_button_row.add_child(pre_dive_cancel_button)
+	_apply_responsive_layout()
 
 
 func _make_wrapped_label(text: String, min_width: int) -> Label:
@@ -553,6 +711,8 @@ func _section_title_for_id(section_id: String) -> String:
 			return "Archive"
 		"progression":
 			return "Progression"
+		"pressure":
+			return "Pressure"
 		"curses":
 			return "Curses"
 		"records":
@@ -587,12 +747,38 @@ func refresh_archive_panel() -> void:
 
 	essence_label.text = "Essence: %d" % app_state.get_essence()
 	request_queue_label.text = app_state.get_request_queue_text()
+	tracked_request_label.text = app_state.get_tracked_request_text()
 	research_label.text = app_state.get_research_job_text()
 	station_label.text = "Stations: %s" % app_state.get_station_layout_text()
+	build_summary_label.text = app_state.get_active_build_summary_text()
+	accessibility_label.text = app_state.get_accessibility_summary_text()
+	pressure_label.text = app_state.get_pressure_summary_text()
 	archive_label.text = _build_archive_text()
 	bonus_label.text = app_state.get_active_archive_bonus_text()
 	deck_label.text = app_state.get_active_deck_brief_text()
 	deck_validation_label.text = _build_deck_validation_text()
+	if text_scale_button != null:
+		text_scale_button.text = "Text Size: %s" % app_state.get_text_scale_label()
+	if contrast_button != null:
+		contrast_button.text = "Contrast: %s" % app_state.get_contrast_mode_label()
+	if palette_button != null:
+		palette_button.text = "Palette: %s" % app_state.get_palette_mode_label()
+	if deck_sort_button != null:
+		deck_sort_button.text = "Sort Deck: %s" % app_state.get_deck_sort_mode_label()
+	if archive_filter_button != null:
+		archive_filter_button.text = "Archive Filter: %s" % app_state.get_archive_filter_mode_label()
+	if guidance_button != null:
+		guidance_button.text = "Guidance: %s" % ("On" if app_state.get_show_tooltips_enabled() else "Off")
+	if app_state.has_pending_pressure_event():
+		if app_state.get_show_tooltips_enabled():
+			prompt_label.text = "Pressure alert: respond in the Pressure section.\n\n%s" % _shorten_text(app_state.get_pressure_summary_text(), 220)
+		else:
+			prompt_label.text = "Pressure alert: open the Pressure section."
+	else:
+		if app_state.get_show_tooltips_enabled():
+			prompt_label.text = "Move near the board, desk, shelf, or entrance."
+		else:
+			prompt_label.text = "Move to a hub point to continue."
 	_update_selection_label()
 	_refresh_slot_buttons()
 	_refresh_inventory_buttons()
@@ -600,10 +786,14 @@ func refresh_archive_panel() -> void:
 	_refresh_collection_buttons()
 	_refresh_reward_panel()
 	_refresh_progression_panel()
+	_refresh_pressure_panel()
 	_refresh_curse_panel()
 	_refresh_record_panel()
 	_refresh_upgrade_panel()
 	_refresh_pre_dive_panel()
+	_apply_accessibility_settings()
+	_apply_responsive_layout()
+	_apply_responsive_layout()
 
 
 func set_request_text(text: String) -> void:
@@ -683,24 +873,94 @@ func _on_start_research_pressed() -> void:
 	refresh_archive_panel()
 
 
+func _on_toggle_guidance_pressed() -> void:
+	if app_state == null:
+		return
+	app_state.toggle_show_tooltips()
+	refresh_archive_panel()
+
+
+func _on_cycle_text_scale_pressed() -> void:
+	if app_state == null:
+		return
+	app_state.cycle_text_scale()
+	refresh_archive_panel()
+
+
+func _on_cycle_contrast_pressed() -> void:
+	if app_state == null:
+		return
+	app_state.cycle_contrast_mode()
+	refresh_archive_panel()
+
+
+func _on_cycle_palette_pressed() -> void:
+	if app_state == null:
+		return
+	app_state.cycle_palette_mode()
+	refresh_archive_panel()
+
+
+func _on_sort_deck_pressed() -> void:
+	if app_state == null:
+		return
+	app_state.cycle_deck_sort_mode()
+	show_detail("Deck Sorted", "Deck display is now sorted by %s." % app_state.get_deck_sort_mode_label())
+	refresh_archive_panel()
+
+
+func _on_cycle_archive_filter_pressed() -> void:
+	if app_state == null:
+		return
+	app_state.cycle_archive_filter_mode()
+	show_detail("Archive Filter", "Archive inventory is now filtered by %s." % app_state.get_archive_filter_mode_label())
+	refresh_archive_panel()
+
+
+func _on_track_active_request_pressed() -> void:
+	if app_state == null:
+		return
+	if app_state.track_active_request():
+		show_detail("Request Tracked", app_state.get_tracked_request_text())
+		refresh_archive_panel()
+
+
+func _on_track_next_request_pressed() -> void:
+	if app_state == null:
+		return
+	if app_state.track_next_request():
+		show_detail("Request Tracked", app_state.get_tracked_request_text())
+		refresh_archive_panel()
+
+
+func _on_clear_tracked_request_pressed() -> void:
+	if app_state == null:
+		return
+	if app_state.clear_tracked_request():
+		show_detail("Request Tracking", "Request tracking cleared.")
+		refresh_archive_panel()
+
+
 func open_pre_dive_panel(request_id: String) -> void:
 	if app_state == null:
 		return
+	if get_viewport() != null:
+		pre_dive_restore_focus = get_viewport().gui_get_focus_owner()
+		if pre_dive_restore_focus != null and pre_dive_panel != null and pre_dive_panel.is_ancestor_of(pre_dive_restore_focus):
+			pre_dive_restore_focus = null
 	pre_dive_request_id = request_id
 	if _get_curse_name(selected_curse_id) == "none":
 		selected_curse_id = _get_default_curse_id()
 	_refresh_pre_dive_panel()
 	pre_dive_panel.visible = true
-	if pre_dive_curse_grid != null:
-		for child in pre_dive_curse_grid.get_children():
-			if child is Button:
-				child.grab_focus()
+	_focus_pre_dive_default_button()
 
 
 func hide_pre_dive_panel() -> void:
 	if pre_dive_panel != null:
 		pre_dive_panel.visible = false
 	pre_dive_request_id = ""
+	_restore_pre_dive_focus()
 
 
 func get_selected_curse_id() -> String:
@@ -732,6 +992,10 @@ func _refresh_pre_dive_panel() -> void:
 		]
 	else:
 		pre_dive_request_label.text = "No active request."
+	if app_state.get_show_tooltips_enabled():
+		pre_dive_theme_label.text = app_state.get_dungeon_theme_preview_text(pre_dive_request_id)
+	else:
+		pre_dive_theme_label.text = "Dungeon theme: %s" % app_state.get_dungeon_theme_name(pre_dive_request_id)
 	pre_dive_bonus_label.text = app_state.get_active_archive_bonus_text()
 	var curse_data: Dictionary = app_state.get_curse_selection_data()
 	pre_dive_curse_label.text = "Curse family: %s\nSelected: %s" % [
@@ -740,6 +1004,7 @@ func _refresh_pre_dive_panel() -> void:
 	]
 	pre_dive_detail_label.text = _get_curse_detail_text(selected_curse_id)
 	_refresh_curse_grid(pre_dive_curse_grid, true)
+	_apply_responsive_layout()
 
 
 func _refresh_progression_panel() -> void:
@@ -747,6 +1012,70 @@ func _refresh_progression_panel() -> void:
 		return
 	progression_summary_label.text = _build_progression_summary_text()
 	_refresh_knowledge_wings()
+
+
+func _refresh_pressure_panel() -> void:
+	if pressure_summary_label == null or app_state == null:
+		return
+
+	pressure_summary_label.text = app_state.get_pressure_summary_text()
+	for child in pressure_button_box.get_children():
+		child.queue_free()
+	pressure_response_buttons.clear()
+
+	var event: Dictionary = app_state.get_pressure_event()
+	if event.is_empty():
+		pressure_detail_label.text = "No active pressure event."
+		pressure_button_box.add_child(_make_wrapped_label("The archive is calm for now.", 440))
+		return
+
+	var event_id := str(event.get("event_id", ""))
+	var event_data: Dictionary = content_db.get_pressure_event_runtime_data(event_id)
+	if event_data.is_empty():
+		pressure_detail_label.text = "Unknown pressure event."
+		pressure_button_box.add_child(_make_wrapped_label("Unable to inspect the event details.", 440))
+		return
+
+	var lines: Array[String] = []
+	lines.append("%s" % str(event_data.get("name", event_id)))
+	lines.append(str(event_data.get("description", "")))
+	var source_request_id := str(event.get("source_request_id", ""))
+	if source_request_id != "":
+		var request = content_db.get_request(source_request_id)
+		lines.append("Triggered by: %s" % str(request.name if request != null else source_request_id))
+	var assets: Array = event_data.get("threat_assets", [])
+	if not assets.is_empty():
+		lines.append("Threatened assets: %s" % ", ".join(assets))
+	pressure_detail_label.text = "\n".join(lines)
+
+	for option in event_data.get("response_options", []):
+		if typeof(option) != TYPE_DICTIONARY:
+			continue
+		var option_id := str(option.get("id", ""))
+		if option_id == "":
+			continue
+		var button := Button.new()
+		button.focus_mode = Control.FOCUS_ALL
+		button.custom_minimum_size = Vector2(0, 54)
+		var option_text := str(option.get("name", option_id))
+		var option_cost := int(option.get("essence_cost", 0))
+		if option_cost > 0:
+			option_text += " (%d essence)" % option_cost
+		button.text = option_text
+		button.pressed.connect(_on_pressure_response_pressed.bind(option_id))
+		pressure_button_box.add_child(button)
+		pressure_response_buttons.append(button)
+
+
+func _on_pressure_response_pressed(option_id: String) -> void:
+	if app_state == null:
+		return
+	var pressure_text: String = app_state.get_pressure_summary_text()
+	if app_state.resolve_pressure_event(option_id):
+		show_detail("Pressure Resolved", pressure_text)
+	else:
+		show_detail("Pressure Response Failed", "That response could not be applied. Check your essence or the event state.")
+	refresh_archive_panel()
 
 
 func _refresh_curse_panel() -> void:
@@ -924,10 +1253,10 @@ func _refresh_inventory_buttons() -> void:
 		child.queue_free()
 	inventory_buttons.clear()
 
-	var inventory: Array = app_state.get_archive_inventory()
+	var inventory: Array = app_state.get_archive_inventory(app_state.get_archive_filter_mode())
 	if inventory.is_empty():
 		var empty_label := Label.new()
-		empty_label.text = "No owned items yet."
+		empty_label.text = "No owned items match the current filter."
 		inventory_grid.add_child(empty_label)
 		return
 
@@ -1222,6 +1551,168 @@ func _get_item_name(item_type: String, item_id: String) -> String:
 func _short_text_from_summary(summary: String) -> String:
 	var first_line := summary.split("\n", false, 1)[0]
 	return _shorten_text(first_line, 82)
+
+
+func _apply_accessibility_settings() -> void:
+	if app_state == null or ui_root == null:
+		return
+
+	var text_scale: float = max(0.9, float(app_state.get_text_scale()))
+	ui_root.scale = Vector2(text_scale, text_scale)
+	ui_root.pivot_offset = Vector2.ZERO
+
+	var high_contrast: bool = app_state.get_contrast_mode() == "high"
+	var text_color := Color(1.0, 1.0, 1.0) if high_contrast else Color(0.95, 0.93, 0.88)
+	_apply_accessibility_to_node(ui_root, text_color, high_contrast, text_scale)
+
+
+func _apply_accessibility_to_node(node: Node, text_color: Color, high_contrast: bool, text_scale: float) -> void:
+	if node is Label:
+		var label: Label = node
+		label.add_theme_color_override("font_color", text_color)
+		if high_contrast:
+			label.add_theme_color_override("font_outline_color", Color.BLACK)
+			label.add_theme_constant_override("outline_size", 2)
+		else:
+			label.remove_theme_color_override("font_outline_color")
+			label.remove_theme_constant_override("outline_size")
+	elif node is Button:
+		var button: Button = node
+		button.add_theme_color_override("font_color", text_color)
+		button.add_theme_color_override("font_hover_color", Color(1.0, 0.96, 0.72) if high_contrast else Color(1.0, 0.95, 0.82))
+		button.add_theme_color_override("font_pressed_color", Color(1.0, 0.85, 0.5) if high_contrast else Color(0.95, 0.9, 0.75))
+		button.add_theme_color_override("font_focus_color", Color(1.0, 1.0, 1.0))
+		button.add_theme_color_override("font_disabled_color", Color(0.72, 0.72, 0.72))
+		button.add_theme_color_override("font_outline_color", Color.BLACK if high_contrast else Color(0.15, 0.15, 0.15))
+		button.add_theme_constant_override("outline_size", 2 if high_contrast else 1)
+		var min_size := button.custom_minimum_size
+		min_size.y = max(min_size.y, 42.0 * text_scale)
+		button.custom_minimum_size = min_size
+
+	for child in node.get_children():
+		if child is Node:
+			_apply_accessibility_to_node(child, text_color, high_contrast, text_scale)
+
+
+func _on_viewport_size_changed() -> void:
+	_apply_responsive_layout()
+
+
+func _apply_responsive_layout() -> void:
+	if info_panel == null or pre_dive_outer == null or pre_dive_curse_grid == null:
+		return
+
+	var viewport := get_viewport()
+	if viewport == null:
+		return
+
+	var viewport_size := viewport.get_visible_rect().size
+	compact_layout = viewport_size.x < 1400.0 or viewport_size.y < 820.0
+
+	var info_width := clampi(int(viewport_size.x * 0.24), 240, 360)
+	if compact_layout:
+		info_width = min(info_width, 300)
+	info_panel.custom_minimum_size = Vector2(info_width, 0)
+
+	var margin_x := 140
+	var margin_y := 56
+	if compact_layout:
+		margin_x = 72
+		margin_y = 40
+	if viewport_size.x < 1024.0 or viewport_size.y < 720.0:
+		margin_x = 40
+		margin_y = 28
+	pre_dive_outer.add_theme_constant_override("margin_left", margin_x)
+	pre_dive_outer.add_theme_constant_override("margin_right", margin_x)
+	pre_dive_outer.add_theme_constant_override("margin_top", margin_y)
+	pre_dive_outer.add_theme_constant_override("margin_bottom", margin_y)
+
+	pre_dive_curse_grid.columns = 1 if viewport_size.x < 1100.0 else 2
+
+	if pre_dive_button_row != null:
+		pre_dive_button_row.alignment = BoxContainer.ALIGNMENT_CENTER if compact_layout else BoxContainer.ALIGNMENT_BEGIN
+
+	if touch_panel != null:
+		touch_panel.anchor_left = 0.64
+		touch_panel.anchor_right = 0.98
+		touch_panel.anchor_top = 0.66
+		touch_panel.anchor_bottom = 0.98
+		touch_panel.visible = compact_layout
+		if touch_panel.visible:
+			var touch_width := 260
+			if viewport_size.x < 900.0 or viewport_size.y < 600.0:
+				touch_width = 220
+			touch_panel.custom_minimum_size = Vector2(touch_width, 0)
+
+
+func _focus_pre_dive_default_button() -> void:
+	if pre_dive_panel == null or not pre_dive_panel.visible or pre_dive_curse_grid == null:
+		return
+
+	var selected_button: Button = null
+	var first_button: Button = null
+	for child in pre_dive_curse_grid.get_children():
+		if child is Button:
+			var button: Button = child
+			if first_button == null:
+				first_button = button
+			if button.button_pressed:
+				selected_button = button
+				break
+
+	if selected_button != null:
+		selected_button.grab_focus()
+	elif first_button != null:
+		first_button.grab_focus()
+	elif pre_dive_confirm_button != null:
+		pre_dive_confirm_button.grab_focus()
+
+
+func _restore_pre_dive_focus() -> void:
+	if pre_dive_restore_focus != null and is_instance_valid(pre_dive_restore_focus):
+		pre_dive_restore_focus.call_deferred("grab_focus")
+		pre_dive_restore_focus = null
+		return
+
+	pre_dive_restore_focus = null
+	if section_buttons.is_empty():
+		return
+
+	var fallback_button: Button = section_buttons[0]
+	if fallback_button != null and is_instance_valid(fallback_button):
+		fallback_button.call_deferred("grab_focus")
+
+
+func _add_touch_button(title: String, action: String) -> void:
+	if title == "":
+		var spacer := Control.new()
+		spacer.custom_minimum_size = Vector2(76, 52)
+		touch_button_box.add_child(spacer)
+		return
+	var button := Button.new()
+	button.text = title
+	button.focus_mode = Control.FOCUS_ALL
+	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	button.custom_minimum_size = Vector2(76, 52)
+	if action != "":
+		button.button_down.connect(_press_touch_action.bind(action))
+		button.button_up.connect(_release_touch_action.bind(action))
+	touch_button_box.add_child(button)
+	if action != "":
+		touch_buttons[action] = button
+
+
+func _press_touch_action(action: String) -> void:
+	Input.action_press(action)
+
+
+func _release_touch_action(action: String) -> void:
+	Input.action_release(action)
+
+
+func _release_all_touch_actions() -> void:
+	for action in touch_buttons.keys():
+		_release_touch_action(str(action))
 
 
 func _get_default_curse_id() -> String:
