@@ -7,34 +7,6 @@ const ARCHIVE_SLOT_COUNT := 6
 const HUD_MARGIN := 18
 const INFO_PANEL_WIDTH := 320
 const DETAIL_PANEL_HEIGHT := 132
-const CURSE_FAMILY_NAME := "Ashen Challenge"
-const CURSE_OPTIONS := [
-	{
-		"id": "curse_blackout",
-		"name": "Blackout Ledger",
-		"risk": "Optional rooms become riskier to explore.",
-		"reward": "Records note the clear as a higher-risk dive.",
-	},
-	{
-		"id": "curse_shrinking_margin",
-		"name": "Shrinking Margin",
-		"risk": "The dive starts with less room for error.",
-		"reward": "The preview flags a sharper reward track.",
-	},
-	{
-		"id": "curse_static_echo",
-		"name": "Static Echo",
-		"risk": "Card cadence feels tighter in the preview.",
-		"reward": "The archive notes a stronger relic pursuit.",
-	},
-	{
-		"id": "curse_salt_draft",
-		"name": "Salt Draft",
-		"risk": "Recovery feels slower in the preview text.",
-		"reward": "The run history marks a cleaner extraction route.",
-	},
-]
-
 var app_state = null
 var content_db = null
 
@@ -761,8 +733,9 @@ func _refresh_pre_dive_panel() -> void:
 	else:
 		pre_dive_request_label.text = "No active request."
 	pre_dive_bonus_label.text = app_state.get_active_archive_bonus_text()
+	var curse_data: Dictionary = app_state.get_curse_selection_data()
 	pre_dive_curse_label.text = "Curse family: %s\nSelected: %s" % [
-		CURSE_FAMILY_NAME,
+		str(curse_data.get("selected_family_name", "none")),
 		_get_curse_name(selected_curse_id) if selected_curse_id != "" else "none",
 	]
 	pre_dive_detail_label.text = _get_curse_detail_text(selected_curse_id)
@@ -850,7 +823,7 @@ func _refresh_curse_grid(grid: GridContainer, pre_dive: bool) -> void:
 	if not pre_dive:
 		curse_buttons.clear()
 
-	for curse in CURSE_OPTIONS:
+	for curse in _get_curse_options():
 		var curse_id := str(curse.get("id", ""))
 		var button := Button.new()
 		button.custom_minimum_size = Vector2(220, 64)
@@ -879,7 +852,7 @@ func _refresh_upgrade_grid() -> void:
 	upgrade_buttons.clear()
 
 	var options: Array[Dictionary] = app_state.get_station_layout_options()
-	var current_layout_id := app_state.get_station_layout_id()
+	var current_layout_id: String = app_state.get_station_layout_id()
 	var option_ids: Array[String] = []
 	for option in options:
 		option_ids.append(str(option.get("id", "")))
@@ -1252,13 +1225,14 @@ func _short_text_from_summary(summary: String) -> String:
 
 
 func _get_default_curse_id() -> String:
-	if CURSE_OPTIONS.is_empty():
+	var curse_options: Array[Dictionary] = _get_curse_options()
+	if curse_options.is_empty():
 		return ""
-	return str(CURSE_OPTIONS[0].get("id", ""))
+	return str(curse_options[0].get("id", ""))
 
 
 func _get_curse_name(curse_id: String) -> String:
-	for curse in CURSE_OPTIONS:
+	for curse in _get_curse_options():
 		if str(curse.get("id", "")) == curse_id:
 			return str(curse.get("name", curse_id))
 	return "none"
@@ -1267,7 +1241,7 @@ func _get_curse_name(curse_id: String) -> String:
 func _get_curse_detail_text(curse_id: String) -> String:
 	if curse_id == "":
 		return "Choose a curse to preview the risk and reward text for the next dive."
-	for curse in CURSE_OPTIONS:
+	for curse in _get_curse_options():
 		if str(curse.get("id", "")) == curse_id:
 			return "%s\nRisk: %s\nReward: %s" % [
 				str(curse.get("name", curse_id)),
@@ -1277,8 +1251,16 @@ func _get_curse_detail_text(curse_id: String) -> String:
 	return "Unknown curse selection."
 
 
+func _get_curse_options() -> Array[Dictionary]:
+	if app_state != null and app_state.has_method("get_available_curse_options"):
+		var options: Array = app_state.get_available_curse_options()
+		if not options.is_empty():
+			return options
+	return []
+
+
 func _build_progression_summary_text() -> String:
-	var request_text := app_state.get_request_queue_text()
+	var request_text: String = app_state.get_request_queue_text()
 	var lines: Array[String] = []
 	lines.append("Archive progression uses the tag wings already present in this build.")
 	lines.append("Essence: %d" % app_state.get_essence())
@@ -1291,21 +1273,21 @@ func _build_progression_summary_text() -> String:
 
 
 func _build_wing_button_text(tag_id: String) -> String:
-	var tag := content_db.get_knowledge_tag(tag_id)
+	var tag: Object = content_db.get_knowledge_tag(tag_id)
 	var tag_name := str(tag.name if tag != null else tag_id)
 	var counts := _get_wing_item_counts(tag_id)
 	return "%s\nTomes %d | Relics %d" % [tag_name, int(counts.get("tomes", 0)), int(counts.get("relics", 0))]
 
 
 func _build_wing_detail_text(tag_id: String) -> String:
-	var tag := content_db.get_knowledge_tag(tag_id)
+	var tag: Object = content_db.get_knowledge_tag(tag_id)
 	if tag == null:
 		return "No wing data available."
 	var counts := _get_wing_item_counts(tag_id)
 	var research_id := _find_research_for_tag(tag_id)
 	var research_text := "No research track found."
 	if research_id != "":
-		var research := content_db.get_research_runtime_data(research_id)
+		var research: Dictionary = content_db.get_research_runtime_data(research_id)
 		research_text = "%s\n%s" % [str(research.get("name", research_id)), str(research.get("description", ""))]
 	return "%s\n%s\nOwned tomes: %d\nOwned relics: %d\nResearch preview:\n%s" % [
 		str(tag.name),
@@ -1335,7 +1317,7 @@ func _get_wing_item_counts(tag_id: String) -> Dictionary:
 
 func _find_research_for_tag(tag_id: String) -> String:
 	for research_id in content_db.get_research_definition_ids():
-		var research := content_db.get_research_runtime_data(research_id)
+		var research: Dictionary = content_db.get_research_runtime_data(research_id)
 		if research.get("knowledge_tags", []).has(tag_id):
 			return research_id
 	return ""
@@ -1370,13 +1352,13 @@ func _build_record_entries_text() -> Array[String]:
 		history = app_state.save_data.get("request_history", [])
 	if history.is_empty():
 		return lines
-	var start_index := max(0, history.size() - 6)
+	var start_index: int = max(0, history.size() - 6)
 	for index in range(start_index, history.size()):
 		if typeof(history[index]) != TYPE_DICTIONARY:
 			continue
 		var entry: Dictionary = history[index]
 		var request_id := str(entry.get("request_id", ""))
-		var request = content_db.get_request(request_id)
+		var request: Object = content_db.get_request(request_id)
 		var title := str(request.name if request != null else request_id)
 		var state := str(entry.get("state", ""))
 		var turn := int(entry.get("turn", 0))
@@ -1405,7 +1387,7 @@ func _build_upgrade_detail_text(layout_id: String) -> String:
 	if layout_id == "":
 		return "Select a layout to preview its effect."
 	var options: Array[Dictionary] = app_state.get_station_layout_options()
-	var current_id := app_state.get_station_layout_id()
+	var current_id: String = app_state.get_station_layout_id()
 	var selected: Dictionary = {}
 	var current: Dictionary = {}
 	for option in options:
