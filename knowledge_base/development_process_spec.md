@@ -24,7 +24,8 @@ The project should be developed against the following document hierarchy:
 1. [arcane_archivist_design.md](./arcane_archivist_design.md)
 2. [living_spec/README.md](./living_spec/README.md)
 3. the current target version inside [living_spec](./living_spec/)
-4. implementation notes and technical decisions created during development
+4. [ai_agent_guardrails.md](./ai_agent_guardrails.md) for AI-assisted development constraints
+5. implementation notes and technical decisions created during development
 
 Rules:
 
