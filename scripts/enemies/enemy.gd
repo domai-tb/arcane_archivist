@@ -40,6 +40,10 @@ func _process(delta: float) -> void:
 	var player = controller.player
 	if player == null or not player.is_alive():
 		return
+	# Only the active room may engage the player. Enemies in later rooms
+	# remain dormant until the run advances into their encounter.
+	if controller.has_method("_get_current_room") and room != controller._get_current_room():
+		return
 
 	attack_timer = max(0.0, attack_timer - delta)
 	var to_player = player.global_position - global_position

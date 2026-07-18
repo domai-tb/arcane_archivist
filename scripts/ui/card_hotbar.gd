@@ -86,8 +86,13 @@ func _process(_delta: float) -> void:
 		if content_db_ref != null and content_db_ref.has_method("get_card_runtime_data"):
 			runtime = content_db_ref.get_card_runtime_data(card.id, _get_active_bonuses())
 		var cost := int(runtime.get("cost", card.cost))
-		var state_text = "Ready" if cooldown <= 0.0 and player.insight >= cost else str(snapped(cooldown, 0.1))
+		var state_text := "Ready"
+		if cooldown > 0.0:
+			state_text = "Cooldown %.1f" % snapped(cooldown, 0.1)
+		elif player.insight < cost:
+			state_text = "Need insight"
 		button.text = "%s\nC:%d %s" % [card.name, cost, state_text]
+		button.tooltip_text = card.description
 		button.disabled = cooldown > 0.0 or player.insight < cost
 
 	info_label.text = "Insight: %d/%d" % [player.insight, player.insight_max]

@@ -3,6 +3,7 @@ extends CanvasLayer
 signal card_selected(index: int)
 
 var title_label: Label
+var objective_label: Label
 var stats_label: Label
 var controls_label: Label
 var prompt_label: Label
@@ -46,6 +47,11 @@ func _build_ui() -> void:
 	title_label = Label.new()
 	title_label.text = "Dungeon Dive"
 	stack.add_child(title_label)
+
+	objective_label = Label.new()
+	objective_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	objective_label.custom_minimum_size = Vector2(360, 36)
+	stack.add_child(objective_label)
 
 	controls_label = Label.new()
 	controls_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -143,6 +149,10 @@ func set_room_title(text: String) -> void:
 	if title_label != null:
 		title_label.text = text
 
+func set_objective_text(text: String) -> void:
+	if objective_label != null:
+		objective_label.text = text
+
 func set_stats_text(text: String) -> void:
 	if stats_label != null:
 		stats_label.text = text
@@ -220,6 +230,7 @@ func _apply_responsive_layout() -> void:
 	ui_root.position = Vector2(margin_x, margin_y)
 
 	controls_label.custom_minimum_size = Vector2(label_width, 36)
+	objective_label.custom_minimum_size = Vector2(label_width, 36)
 	stats_label.custom_minimum_size = Vector2(label_width, 40)
 	prompt_label.custom_minimum_size = Vector2(label_width, 40)
 	message_label.custom_minimum_size = Vector2(label_width, 40)

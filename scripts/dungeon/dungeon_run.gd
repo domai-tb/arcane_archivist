@@ -54,6 +54,7 @@ func _build_scene() -> void:
 	hud.card_selected.connect(_on_card_selected)
 	hud.set_active_bonuses_text(app_state.get_active_run_bonus_text())
 	hud.set_build_text(app_state.get_active_build_summary_text())
+	hud.set_objective_text(_get_objective_text())
 	hud.set_deck_text(app_state.get_active_deck_brief_text())
 	_refresh_controls_label()
 
@@ -91,7 +92,7 @@ func _process(_delta: float) -> void:
 
 	if hud != null:
 		hud.set_room_title("%s: %s" % [app_state.get_dungeon_theme_name(run_state.request_id), room.room_title])
-		hud.set_stats_text(room.get_stats_text())
+		hud.set_stats_text(_get_dive_stats_text(room))
 		hud.set_prompt_text(room.get_prompt_text())
 		hud.set_active_bonuses_text(app_state.get_active_run_bonus_text())
 		hud.set_build_text(app_state.get_active_build_summary_text())
@@ -227,7 +228,7 @@ func _refresh_hud(message: String) -> void:
 	var room = _get_current_room()
 	if room != null:
 		hud.set_room_title("%s: %s" % [app_state.get_dungeon_theme_name(run_state.request_id), room.room_title])
-		hud.set_stats_text(room.get_stats_text())
+		hud.set_stats_text(_get_dive_stats_text(room))
 		hud.set_prompt_text(room.get_prompt_text())
 	else:
 		hud.set_room_title("Dungeon Dive")
@@ -237,7 +238,19 @@ func _refresh_hud(message: String) -> void:
 	hud.set_active_bonuses_text(app_state.get_active_run_bonus_text())
 	hud.set_build_text(app_state.get_active_build_summary_text())
 	hud.set_deck_text(app_state.get_active_deck_brief_text())
+	hud.set_objective_text(_get_objective_text())
 	_refresh_controls_label()
+
+func _get_objective_text() -> String:
+	var request = content_db.get_request(run_state.request_id) if content_db != null and run_state != null else null
+	if request == null:
+		return "Objective: Recover the requested tome."
+	return "Objective: %s" % str(request.objective_text)
+
+func _get_dive_stats_text(room) -> String:
+	if player == null:
+		return room.get_stats_text()
+	return "Health: %d/%d | Shield: %d | %s" % [player.hp, player.max_hp, player.shield, room.get_stats_text()]
 
 func _refresh_controls_label() -> void:
 	if hud == null or app_state == null:

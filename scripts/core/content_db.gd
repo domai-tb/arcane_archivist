@@ -497,7 +497,7 @@ func get_card_runtime_data(id: String, active_bonuses: Array = []) -> Dictionary
 			runtime.cooldown = max(0.0, float(runtime.cooldown) - float(modifiers.get("cooldown_reduction_bonus", 0.0)))
 			_append_runtime_note(runtime, bonus, "cooldown -%s" % str(modifiers.get("cooldown_reduction_bonus", 0.0)))
 
-		for entry in bonus.get("card_modifiers", []):
+		for entry in modifiers.get("card_modifiers", []):
 			if typeof(entry) != TYPE_DICTIONARY:
 				continue
 			var match_tag := str(entry.get("tag", ""))

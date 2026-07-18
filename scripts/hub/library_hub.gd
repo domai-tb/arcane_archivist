@@ -20,6 +20,9 @@ func setup(new_app_state, new_content_db) -> void:
 func _ready() -> void:
 	if app_state == null:
 		return
+	var viewport := get_viewport()
+	if viewport != null:
+		viewport.physics_object_picking = true
 	_build_scene()
 
 func _build_scene() -> void:
@@ -49,6 +52,7 @@ func _build_interactables() -> void:
 	board.body_text = "Review the patron queue and request deadlines."
 	board.accent_color = _get_interactable_accent("request_board")
 	board.position = Vector2(145, 170)
+	board.interacted.connect(_on_interactable_clicked.bind(board))
 	add_child(board)
 	interactables.append(board)
 
@@ -58,6 +62,7 @@ func _build_interactables() -> void:
 	desk.body_text = "Process the latest dive results into essence."
 	desk.accent_color = _get_interactable_accent("research_desk")
 	desk.position = Vector2(300, 145)
+	desk.interacted.connect(_on_interactable_clicked.bind(desk))
 	add_child(desk)
 	interactables.append(desk)
 
@@ -67,6 +72,7 @@ func _build_interactables() -> void:
 	shelf.body_text = "Arrange stations and archive items to tune the library."
 	shelf.accent_color = _get_interactable_accent("archive_shelf")
 	shelf.position = Vector2(460, 150)
+	shelf.interacted.connect(_on_interactable_clicked.bind(shelf))
 	add_child(shelf)
 	interactables.append(shelf)
 
@@ -76,6 +82,7 @@ func _build_interactables() -> void:
 	entrance.body_text = "Begin the current dive."
 	entrance.accent_color = _get_interactable_accent("dungeon_entrance")
 	entrance.position = Vector2(610, 230)
+	entrance.interacted.connect(_on_interactable_clicked.bind(entrance))
 	add_child(entrance)
 	interactables.append(entrance)
 
@@ -152,6 +159,11 @@ func _handle_interaction(focused) -> void:
 		hud.show_detail("Begin Dive", dive_text + "\n\nSelect a curse preview before confirming the dive.")
 		hud.open_pre_dive_panel(app_state.get_active_request_id())
 
+func _on_interactable_clicked(interactable_kind: String, interactable) -> void:
+	if interactable_kind == "":
+		return
+	_handle_interaction(interactable)
+
 func _get_focused_interactable():
 	if player == null:
 		return null
@@ -183,7 +195,10 @@ func _refresh_ui() -> void:
 	hud.set_research_summary_text(app_state.get_research_job_text())
 	hud.set_station_summary_text("Stations: %s" % app_state.get_station_layout_text())
 	hud.set_archive_text(_build_archive_text())
-	hud.set_bonus_text(app_state.get_active_archive_bonus_text())
+	var archive_bonus_text: String = app_state.get_active_archive_bonus_text()
+	if app_state.has_method("get_archive_bonus_overview_text"):
+		archive_bonus_text = app_state.get_archive_bonus_overview_text()
+	hud.set_bonus_text(archive_bonus_text)
 	hud.set_deck_text(app_state.get_active_deck_brief_text())
 
 func _on_pre_dive_confirmed(request_id: String, curse_id: String) -> void:

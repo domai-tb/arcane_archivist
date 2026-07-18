@@ -50,9 +50,11 @@ func _spawn_contents() -> void:
 
 func _pick_spawn_point(spawn_index: int) -> Vector2:
 	var rng := RandomNumberGenerator.new()
+	# Enemies are children of this room, so their spawn positions must be
+	# local to the room rather than using the room's global origin.
 	rng.seed = int(room_index) * 7919 + int(room_bounds.position.x)
-	var base_x := room_bounds.position.x + 200.0 + float(spawn_index) * 180.0
-	var base_y := room_bounds.position.y + 180.0
+	var base_x := 200.0 + float(spawn_index) * 180.0
+	var base_y := 180.0
 	return Vector2(base_x + rng.randf_range(-40.0, 40.0), base_y + rng.randf_range(-70.0, 70.0))
 
 func get_room_type() -> String:

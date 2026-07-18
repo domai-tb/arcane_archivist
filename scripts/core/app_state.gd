@@ -375,6 +375,10 @@ func _add_action_key(action_name: String, keycode: Key) -> void:
 	if not InputMap.has_action(action_name):
 		InputMap.add_action(action_name)
 
+	for existing_event in InputMap.action_get_events(action_name):
+		if existing_event is InputEventKey and existing_event.keycode == keycode:
+			return
+
 	var event := InputEventKey.new()
 	event.keycode = keycode
 	InputMap.action_add_event(action_name, event)
@@ -2312,6 +2316,39 @@ func get_active_archive_bonus_text() -> String:
 		lines.append("%s: %s" % [bonus.get("name", bonus.get("id", "")), bonus.get("description", "")])
 	return "Active bonuses:\n- " + "\n- ".join(lines)
 
+func get_archive_bonus_overview_text() -> String:
+	var active_ids: Array[String] = []
+	for bonus in get_active_archive_bonuses():
+		active_ids.append(str(bonus.get("id", "")))
+	var active_lines: Array[String] = []
+	var inactive_lines: Array[String] = []
+	for bonus in content_db.get_archive_bonuses():
+		var bonus_id := str(bonus.get("id", ""))
+		var summary := "%s — %s" % [str(bonus.get("name", bonus_id)), str(bonus.get("description", ""))]
+		if active_ids.has(bonus_id):
+			active_lines.append(summary)
+		else:
+			inactive_lines.append(summary)
+	var lines: Array[String] = ["Active pairings:"]
+	lines.append("- " + ("None" if active_lines.is_empty() else "\n- ".join(active_lines)))
+	lines.append("Inactive pairings:")
+	lines.append("- " + ("None" if inactive_lines.is_empty() else "\n- ".join(inactive_lines)))
+	return "\n".join(lines)
+
+func get_archive_item_rule_text(item_type: String, item_id: String) -> String:
+	if content_db == null or not content_db.has_method("get_archive_bonuses"):
+		return "No known pairing rule."
+	var rules: Array[String] = []
+	for bonus in content_db.get_archive_bonuses():
+		if str(bonus.get("tome_id", "")) != item_id and str(bonus.get("relic_id", "")) != item_id:
+			continue
+		var partner_type := "relic" if item_type == "tome" else "tome"
+		var partner_id := str(bonus.get("relic_id", "")) if item_type == "tome" else str(bonus.get("tome_id", ""))
+		rules.append("Pair with %s to activate %s: %s" % [_get_item_name(partner_type, partner_id), str(bonus.get("name", bonus.get("id", ""))), str(bonus.get("description", ""))])
+	if rules.is_empty():
+		return "No known pairing rule."
+	return "\n".join(rules)
+
 func get_active_run_bonus_text() -> String:
 	var bonuses := get_active_run_bonuses()
 	if bonuses.is_empty():
@@ -2490,19 +2527,30 @@ func finish_run(success: bool, tome_id: String = "", relic_id: String = "") -> v
 		current_run.completed = success
 		current_run.failed = not success
 
+	var awarded_relic_id := relic_id
+	if success and current_run != null and current_run.reward_relic_id != "":
+		awarded_relic_id = current_run.reward_relic_id
+	if success and awarded_relic_id == "" and content_db != null:
+		var reward_seed := int(current_run.run_seed) if current_run != null else int(Time.get_ticks_msec())
+		awarded_relic_id = content_db.pick_relic_reward(reward_seed, get_archive_relics())
+		if awarded_relic_id == "":
+			var fallback_relics: Array[String] = content_db.get_relic_reward_pool()
+			if not fallback_relics.is_empty():
+				awarded_relic_id = fallback_relics[0]
+		if current_run != null:
+			current_run.reward_relic_id = awarded_relic_id
+
 	if success and tome_id != "":
 		grant_tome(tome_id)
-	if success and relic_id != "":
-		grant_relic(relic_id)
-	if success and current_run != null and current_run.reward_relic_id != "":
-		grant_relic(current_run.reward_relic_id)
+	if success and awarded_relic_id != "":
+		grant_relic(awarded_relic_id)
 
 	if success:
 		var current_request_id := get_active_request_id()
 		if current_request_id != "":
 			mark_request_completed(current_request_id, tome_id)
 			_rotate_request_queue_after_completion(current_request_id)
-			_queue_research_job(current_request_id, tome_id, relic_id)
+			_queue_research_job(current_request_id, tome_id, awarded_relic_id)
 		var reward_count := 3
 		var reward_seed := Time.get_ticks_msec()
 		if current_run != null:
@@ -2526,7 +2574,7 @@ func finish_run(success: bool, tome_id: String = "", relic_id: String = "") -> v
 			"request_id": current_run.request_id,
 			"theme_id": current_run.theme_id,
 			"tome_id": tome_id,
-			"relic_id": relic_id,
+			"relic_id": awarded_relic_id,
 			"wing_id": current_run.active_wing_id,
 			"curse_family_id": current_run.selected_curse_family_id,
 			"curse_ids": current_run.selected_curse_ids.duplicate(),
@@ -2541,6 +2589,10 @@ func finish_run(success: bool, tome_id: String = "", relic_id: String = "") -> v
 		current_run = null
 
 	advance_dive_turn()
+	# Turn advancement may normalize other library state; preserve the relic
+	# reward as owned even when it was not placed in an archive slot.
+	if success and awarded_relic_id != "" and not get_archive_relics().has(awarded_relic_id):
+		grant_relic(awarded_relic_id)
 
 	clear_selected_curse_selection()
 	run_finished.emit(success, tome_id)
@@ -2554,6 +2606,8 @@ func grant_tome(tome_id: String) -> void:
 		tomes.append(tome_id)
 		save_data["archived_tome_ids"] = tomes
 		archive_changed.emit()
+		save_changed.emit()
+		_save()
 
 func grant_relic(relic_id: String) -> void:
 	if relic_id == "":
@@ -2563,6 +2617,8 @@ func grant_relic(relic_id: String) -> void:
 		relics.append(relic_id)
 		save_data["archived_relic_ids"] = relics
 		archive_changed.emit()
+		save_changed.emit()
+		_save()
 
 func mark_request_completed(request_id: String, tome_id: String) -> void:
 	var completed: Array = save_data.get("completed_request_ids", [])
@@ -2988,11 +3044,14 @@ func _find_slot_index(item_type: String, item_id: String, source_slots: Array) -
 	return -1
 
 func _slots_are_adjacent(first_index: int, second_index: int) -> bool:
-	var first_x := first_index % ARCHIVE_GRID_COLUMNS
-	var first_y := float(first_index) / float(ARCHIVE_GRID_COLUMNS)
-	var second_x := second_index % ARCHIVE_GRID_COLUMNS
-	var second_y := float(second_index) / float(ARCHIVE_GRID_COLUMNS)
-	return abs(first_x - second_x) + abs(first_y - second_y) == 1
+	if first_index < 0 or second_index < 0:
+		return false
+	var delta := absi(first_index - second_index)
+	if delta == ARCHIVE_GRID_COLUMNS:
+		return true
+	if delta != 1:
+		return false
+	return floori(float(first_index) / float(ARCHIVE_GRID_COLUMNS)) == floori(float(second_index) / float(ARCHIVE_GRID_COLUMNS))
 
 func _is_valid_archive_item(item_type: String, item_id: String) -> bool:
 	if item_type == "tome":

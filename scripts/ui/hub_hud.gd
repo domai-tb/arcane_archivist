@@ -94,6 +94,9 @@ var touch_button_box: GridContainer
 var touch_buttons: Dictionary = {}
 var top_row: HBoxContainer
 var info_panel: PanelContainer
+var deck_panel: PanelContainer
+var deck_box: VBoxContainer
+var service_row: HBoxContainer
 var pre_dive_outer: MarginContainer
 var pre_dive_button_row: HBoxContainer
 var pre_dive_restore_focus: Control
@@ -104,6 +107,7 @@ var selected_collection_card_id: String = ""
 var selected_deck_slot_index: int = -1
 var selected_reward_card_id: String = ""
 var ui_root: Control
+var ui_overlay_root: Control
 
 
 func setup(new_app_state, new_content_db) -> void:
@@ -141,6 +145,7 @@ func _build_ui() -> void:
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
+	ui_overlay_root = root
 
 	var margin := MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -150,11 +155,16 @@ func _build_ui() -> void:
 	margin.add_theme_constant_override("margin_bottom", HUD_MARGIN)
 	root.add_child(margin)
 
+	var scroll := ScrollContainer.new()
+	scroll.set_anchors_preset(Control.PRESET_FULL_RECT)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	margin.add_child(scroll)
+
 	var stack := VBoxContainer.new()
 	stack.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	stack.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	stack.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	stack.add_theme_constant_override("separation", 12)
-	margin.add_child(stack)
+	scroll.add_child(stack)
 	ui_root = stack
 
 	top_row = HBoxContainer.new()
@@ -223,7 +233,7 @@ func _build_ui() -> void:
 	pressure_label = _make_wrapped_label("Pressure: calm.", 280)
 	info_box.add_child(pressure_label)
 
-	var service_row := HBoxContainer.new()
+	service_row = HBoxContainer.new()
 	service_row.add_theme_constant_override("separation", 8)
 	info_box.add_child(service_row)
 
@@ -476,11 +486,11 @@ func _build_ui() -> void:
 	section_panels["archive"] = archive_section
 	_show_section(active_section_id)
 
-	var deck_panel := PanelContainer.new()
+	deck_panel = PanelContainer.new()
 	deck_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	stack.add_child(deck_panel)
 
-	var deck_box := VBoxContainer.new()
+	deck_box = VBoxContainer.new()
 	deck_box.add_theme_constant_override("separation", 8)
 	deck_panel.add_child(deck_box)
 
@@ -754,7 +764,7 @@ func refresh_archive_panel() -> void:
 	accessibility_label.text = app_state.get_accessibility_summary_text()
 	pressure_label.text = app_state.get_pressure_summary_text()
 	archive_label.text = _build_archive_text()
-	bonus_label.text = app_state.get_active_archive_bonus_text()
+	bonus_label.text = app_state.get_archive_bonus_overview_text() if app_state.has_method("get_archive_bonus_overview_text") else app_state.get_active_archive_bonus_text()
 	deck_label.text = app_state.get_active_deck_brief_text()
 	deck_validation_label.text = _build_deck_validation_text()
 	if text_scale_button != null:
@@ -792,7 +802,6 @@ func refresh_archive_panel() -> void:
 	_refresh_upgrade_panel()
 	_refresh_pre_dive_panel()
 	_apply_accessibility_settings()
-	_apply_responsive_layout()
 	_apply_responsive_layout()
 
 
@@ -1270,6 +1279,7 @@ func _refresh_inventory_buttons() -> void:
 		var item_name: String = str(entry.get("name", item_id))
 		var placed_text := " (placed)" if bool(entry.get("placed", false)) else ""
 		item_button.text = "%s\n%s%s" % [item_name, item_type.capitalize(), placed_text]
+		item_button.tooltip_text = app_state.get_archive_item_rule_text(item_type, item_id)
 
 		if item_type == selected_item_type and item_id == selected_item_id:
 			item_button.modulate = Color(1.0, 0.95, 0.75)
@@ -1354,8 +1364,11 @@ func _refresh_reward_panel() -> void:
 		var card_id := str(card_id_variant)
 		var button := Button.new()
 		button.custom_minimum_size = Vector2(220, 84)
+		button.clip_text = true
 		button.focus_mode = Control.FOCUS_ALL
-		button.text = _shorten_text(content_db.get_card_runtime_summary(card_id, app_state.get_active_archive_bonuses()), 90)
+		var reward_summary: String = content_db.get_card_runtime_summary(card_id, app_state.get_active_archive_bonuses())
+		button.text = _shorten_text(reward_summary, 56)
+		button.tooltip_text = reward_summary + "\n\nChoose this card to add it to the collection."
 		button.pressed.connect(_on_reward_card_pressed.bind(card_id))
 		reward_grid.add_child(button)
 		reward_buttons.append(button)
@@ -1608,6 +1621,61 @@ func _apply_responsive_layout() -> void:
 
 	var viewport_size := viewport.get_visible_rect().size
 	compact_layout = viewport_size.x < 1400.0 or viewport_size.y < 820.0
+	if deck_panel != null:
+		# The dive HUD already exposes the active starter deck. Keep the hub's
+		# collection editor out of the compact viewport so the request and
+		# archive panels remain usable without horizontal clipping. A pending
+		# reward is the exception: its choice must remain actionable before the
+		# next dive.
+		var reward_pending: bool = app_state != null and app_state.has_method("has_pending_card_reward_options") and app_state.has_pending_card_reward_options()
+		if compact_layout and reward_pending and reward_panel != null and ui_overlay_root != null:
+			# Pull the actionable reward out of the wide desktop Deck Lab so a
+			# completed dive can always be resolved on a small viewport.
+			if reward_panel.get_parent() != ui_overlay_root:
+				reward_panel.get_parent().remove_child(reward_panel)
+				ui_overlay_root.add_child(reward_panel)
+				reward_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
+			var reward_box := reward_panel.get_child(0) as Control
+			if reward_box != null:
+				reward_box.custom_minimum_size = Vector2.ZERO
+				reward_box.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+				for child in reward_box.get_children():
+					if child is Control:
+						child.custom_minimum_size.x = 0.0
+			reward_panel.position = Vector2(18.0, 150.0)
+			reward_panel.clip_contents = true
+			reward_panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+			reward_panel.custom_minimum_size = Vector2(min(760.0, viewport_size.x - 36.0), 0.0)
+			deck_panel.visible = false
+		else:
+			if reward_panel != null and reward_panel.get_parent() == ui_overlay_root and deck_box != null:
+				ui_overlay_root.remove_child(reward_panel)
+				deck_box.add_child(reward_panel)
+				reward_panel.position = Vector2.ZERO
+				reward_panel.custom_minimum_size = Vector2.ZERO
+			deck_panel.visible = not compact_layout
+		if deck_box != null:
+			for child in deck_box.get_children():
+				child.visible = not compact_layout or (reward_pending and child == reward_panel)
+		if reward_text != null:
+			reward_text.custom_minimum_size.x = 0.0 if compact_layout else 760.0
+		if reward_grid != null:
+			reward_grid.columns = 1 if compact_layout else 3
+			for child in reward_grid.get_children():
+				if child is Button and compact_layout:
+					child.custom_minimum_size.x = min(700.0, viewport_size.x - 72.0)
+		if compact_layout and reward_pending and reward_panel != null:
+			# Reparenting preserves the old desktop container size; clear it so
+			# the overlay recomputes from its compact children.
+			reward_panel.reset_size()
+			reward_panel.size = Vector2(min(760.0, viewport_size.x - 36.0), min(300.0, viewport_size.y - 180.0))
+			reward_panel.set_deferred("size", Vector2(min(760.0, viewport_size.x - 36.0), min(300.0, viewport_size.y - 180.0)))
+	if service_row != null:
+		# These are expansion-system shortcuts. The active 0.1 loop remains
+		# available through the request, archive, entrance, and touch controls;
+		# hiding the wide shortcut row prevents it from forcing the whole HUD
+		# beyond a small viewport.
+		service_row.visible = not compact_layout
 
 	var info_width := clampi(int(viewport_size.x * 0.24), 240, 360)
 	if compact_layout:
@@ -1660,17 +1728,17 @@ func _focus_pre_dive_default_button() -> void:
 				selected_button = button
 				break
 
-	if selected_button != null:
+	if selected_button != null and selected_button.is_inside_tree():
 		selected_button.grab_focus()
-	elif first_button != null:
+	elif first_button != null and first_button.is_inside_tree():
 		first_button.grab_focus()
-	elif pre_dive_confirm_button != null:
+	elif pre_dive_confirm_button != null and pre_dive_confirm_button.is_inside_tree():
 		pre_dive_confirm_button.grab_focus()
 
 
 func _restore_pre_dive_focus() -> void:
-	if pre_dive_restore_focus != null and is_instance_valid(pre_dive_restore_focus):
-		pre_dive_restore_focus.call_deferred("grab_focus")
+	if pre_dive_restore_focus != null and is_instance_valid(pre_dive_restore_focus) and pre_dive_restore_focus.is_inside_tree():
+		call_deferred("_focus_if_valid", pre_dive_restore_focus)
 		pre_dive_restore_focus = null
 		return
 
@@ -1679,8 +1747,13 @@ func _restore_pre_dive_focus() -> void:
 		return
 
 	var fallback_button: Button = section_buttons[0]
-	if fallback_button != null and is_instance_valid(fallback_button):
-		fallback_button.call_deferred("grab_focus")
+	if fallback_button != null and is_instance_valid(fallback_button) and fallback_button.is_inside_tree():
+		call_deferred("_focus_if_valid", fallback_button)
+
+
+func _focus_if_valid(control: Control) -> void:
+	if control != null and is_instance_valid(control) and control.is_inside_tree():
+		control.grab_focus()
 
 
 func _add_touch_button(title: String, action: String) -> void:
